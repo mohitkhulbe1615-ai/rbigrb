@@ -666,7 +666,6 @@ export default function App() {
           return t - 1;
         });
       }, 1000);
-      }, 1000);
       return () => clearInterval(timerRef.current);
     }
   }, [screen, timeLeft]);
