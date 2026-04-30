@@ -1,30 +1,29 @@
-# RBI Grade B — Practice Dashboard
+# RBI Grade B — Practice Dashboard v2
 
-Timed MCQ practice with instant scoring, answer review, and revision notes.
+Timed MCQ practice aligned to RBI Grade B Phase 1 & 2 syllabus, with AI-generated questions, wrong-answer tracking, and comprehensive revision notes.
 
-## Deploy to Vercel (2 minutes)
+## What's New in v2
+- ☀️ Light/Dark mode toggle
+- ❌ Wrong Answers section — auto-saved, categorized by topic
+- 📚 Expanded revision notes (100+ revision points across all subjects)
+- 🧠 Smart question deduplication — tracks used questions to avoid repeats
+- 📋 RBI syllabus-aligned question prompts with PYQ-style difficulty
+- 🔍 GA questions focus on last 6 months current affairs
 
-1. Unzip this folder
-2. Push to GitHub:
-   ```bash
-   cd rbi-grade-b
-   git init
-   git add .
-   git commit -m "RBI Grade B dashboard"
-   gh repo create rbi-grade-b --public --push --source=.
-   ```
-3. Go to [vercel.com/new](https://vercel.com/new)
-4. Import the `rbi-grade-b` repo
-5. Framework preset: **Vite**
-6. Click **Deploy**
-
-That's it. You'll get a live URL in ~60 seconds.
-
-## Run locally
+## Deploy to Vercel
 
 ```bash
-npm install
-npm run dev
+cd rbi-grade-b
+git init && git add . && git commit -m "v2"
+git remote add origin https://github.com/jaankarihub15-cyber/rbi-grade-b.git
+git push -u origin main
 ```
 
-Opens at http://localhost:5173
+On Vercel: Import repo → Framework: Vite → Env var: `ANTHROPIC_API_KEY` → Deploy.
+
+## Local Dev
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```

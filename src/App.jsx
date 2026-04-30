@@ -1,594 +1,937 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { FALLBACK_BANK } from "./questions_index.js";
 
+// ═══════════════════════════════════════════════════════════
+// THEME SYSTEM
+// ═══════════════════════════════════════════════════════════
+const THEMES = {
+  dark: {
+    bg: "#0A0F1C", bgCard: "rgba(255,255,255,0.03)", bgCardHover: "rgba(255,255,255,0.06)",
+    border: "rgba(255,255,255,0.06)", borderActive: "rgba(255,255,255,0.12)",
+    text: "#E8ECF4", textSecondary: "#94A3B8", textMuted: "#64748B",
+    accent: "#0E7C6B", accentGlow: "rgba(14,124,107,0.15)",
+    correct: "#10B981", wrong: "#EF4444", skip: "#F59E0B",
+    grain: 0.03,
+  },
+  light: {
+    bg: "#F5F5F0", bgCard: "rgba(0,0,0,0.02)", bgCardHover: "rgba(0,0,0,0.04)",
+    border: "rgba(0,0,0,0.08)", borderActive: "rgba(0,0,0,0.15)",
+    text: "#1A1A2E", textSecondary: "#4A5568", textMuted: "#718096",
+    accent: "#0E7C6B", accentGlow: "rgba(14,124,107,0.08)",
+    correct: "#059669", wrong: "#DC2626", skip: "#D97706",
+    grain: 0.015,
+  },
+};
+
+// ═══════════════════════════════════════════════════════════
+// SUBJECTS
+// ═══════════════════════════════════════════════════════════
 const SUBJECTS = [
-  { id: "esi", label: "Economic & Social Issues", icon: "📊", color: "#0E7C6B" },
-  { id: "fm", label: "Finance & Management", icon: "💰", color: "#B8860B" },
-  { id: "ga", label: "General Awareness", icon: "🌍", color: "#2E5A88" },
-  { id: "quant", label: "Quantitative Aptitude", icon: "🔢", color: "#8B3A62" },
-  { id: "english", label: "English Language", icon: "📝", color: "#5B4A8A" },
-  { id: "reasoning", label: "Reasoning", icon: "🧩", color: "#9B4D2B" },
+  { id: "ga", label: "General Awareness", icon: "🌍", color: "#2E5A88", desc: "Banking, Current Affairs, Static GK" },
+  { id: "esi", label: "Economic & Social Issues", icon: "📊", color: "#0E7C6B", desc: "Indian Economy, Monetary Policy, Social Dev" },
+  { id: "fm", label: "Finance & Management", icon: "💰", color: "#B8860B", desc: "Banking, Financial Markets, Management" },
+  { id: "quant", label: "Quantitative Aptitude", icon: "🔢", color: "#8B3A62", desc: "DI, Arithmetic, Number Series" },
+  { id: "english", label: "English Language", icon: "📝", color: "#5B4A8A", desc: "RC, Grammar, Vocabulary" },
+  { id: "reasoning", label: "Reasoning Ability", icon: "🧩", color: "#9B4D2B", desc: "Puzzles, Syllogism, Coding-Decoding" },
 ];
 
-const QUESTION_COUNTS = [10, 15, 20, 25, 30];
+const QCOUNTS = [10, 15, 20, 25];
 
-// Revision notes data
-const REVISION_NOTES = {
-  esi: [
-    { title: "Monetary Policy", points: ["Repo Rate – rate at which RBI lends to commercial banks", "Reverse Repo – rate at which RBI borrows from banks", "CRR – Cash Reserve Ratio, % of NDTL kept with RBI", "SLR – Statutory Liquidity Ratio, % of NDTL in govt securities", "LAF – Liquidity Adjustment Facility (repo + reverse repo)", "MSF – Marginal Standing Facility, 0.25% above repo", "Bank Rate – long-term lending rate by RBI"] },
-    { title: "Inflation Indices", points: ["CPI – Consumer Price Index, used for inflation targeting", "WPI – Wholesale Price Index, base year 2011-12", "GDP Deflator – broadest measure of inflation", "RBI targets CPI inflation at 4% (±2%)", "MPC – 6 members, 3 RBI + 3 external, decides repo rate"] },
-    { title: "Financial Inclusion", points: ["PMJDY – Jan Dhan Yojana, zero balance accounts", "PMJJBY – Jeevan Jyoti Bima, ₹2L life cover at ₹436/yr", "PMSBY – Suraksha Bima, ₹2L accident cover at ₹20/yr", "APY – Atal Pension Yojana, ₹1K-5K pension", "MUDRA – Micro Units Development & Refinance Agency", "Shishu (<₹50K), Kishore (₹50K-5L), Tarun (₹5L-10L)"] },
-    { title: "Banking Reforms", points: ["Basel III – min CAR 10.5% (RBI), 8% (global)", "CRAR = (Tier 1 + Tier 2 Capital) / RWA", "NPA – Non-Performing Asset, 90 days overdue", "IBC – Insolvency and Bankruptcy Code 2016", "NCLT – National Company Law Tribunal adjudicates IBC", "PCA – Prompt Corrective Action framework by RBI", "SARFAESI Act – secured creditor recovery without court"] },
-    { title: "External Sector", points: ["BoP – Current Account + Capital Account + Errors", "CAD – Current Account Deficit = Trade + Invisibles", "FEMA 1999 replaced FERA 1973", "ECB – External Commercial Borrowings", "FDI vs FPI – FDI is 10%+ stake, FPI is <10%", "DTAA – Double Taxation Avoidance Agreement", "SDR – Special Drawing Rights (IMF basket currency)"] },
-  ],
-  fm: [
-    { title: "RBI Structure & Functions", points: ["Established 1 April 1935, nationalized 1949", "Governor + 4 Deputy Governors", "Banker to Govt, Banker's Bank, Note Issuer", "Minimum Reserve System since 1957 (₹200cr)", "Section 24 – SLR, Section 42 – CRR", "Section 18 – Emergency lending (lender of last resort)", "RBI Act 1934 governs its functioning"] },
-    { title: "Capital Markets", points: ["Primary Market – IPO, FPO, Rights Issue, OFS", "SEBI – regulator, established 1992 (Act)", "ASBA – Application Supported by Blocked Amount", "T+1 settlement cycle in Indian markets", "Circuit breakers: 10%, 15%, 20% on indices", "SME platform – BSE SME, NSE Emerge", "DVP – Delivery versus Payment"] },
-    { title: "Management Concepts", points: ["SWOT – Strengths, Weaknesses, Opportunities, Threats", "PESTEL – Political, Economic, Social, Tech, Env, Legal", "Porter's 5 Forces – rivalry, buyers, suppliers, entrants, substitutes", "BCG Matrix – Star, Cash Cow, Question Mark, Dog", "Maslow's Hierarchy – Physiological→Safety→Social→Esteem→Self-actualization", "McGregor's Theory X (authoritarian) vs Y (participative)", "Herzberg – Hygiene factors vs Motivators"] },
-    { title: "Government Securities", points: ["T-Bills – 91, 182, 364 days (zero coupon)", "Dated G-Secs – 5-40 year maturity", "SDL – State Development Loans", "STRIPS – Separate Trading of Registered Interest and Principal", "NDS-OM – Negotiated Dealing System - Order Matching", "Ways and Means Advances – RBI to Govt short-term", "Cash Management Bills – <91 days, ad hoc"] },
-  ],
-  ga: [
-    { title: "Important RBI Committees", points: ["Narasimham Committee I (1991) & II (1998) – Banking reforms", "YV Reddy Committee – Fiscal responsibility", "Urjit Patel Committee – Inflation targeting framework", "PJ Nayak Committee – Governance of bank boards", "Damodaran Committee – Customer service in banks", "Nachiket Mor Committee – Financial inclusion", "SS Mundra Committee – Digital payments"] },
-    { title: "International Organizations", points: ["IMF – 190 members, SDR basket (USD, EUR, CNY, JPY, GBP)", "World Bank – IBRD + IDA (together called World Bank)", "ADB – HQ Manila, 68 members", "NDB – BRICS bank, HQ Shanghai", "AIIB – HQ Beijing, 109 members", "BIS – Central bank for central banks, HQ Basel", "FSB – Financial Stability Board, G20 body"] },
-    { title: "Constitutional Bodies", points: ["CAG – Comptroller & Auditor General (Art 148)", "UPSC – Union Public Service Commission (Art 315)", "Election Commission – Art 324", "Finance Commission – Art 280, every 5 years", "16th FC (2020-25) – Devolution 41% to states", "NITI Aayog replaced Planning Commission (2015)", "GST Council – Art 279A, chaired by FM"] },
-  ],
-  quant: [
-    { title: "Key Formulas", points: ["SI = P×R×T/100", "CI = P(1+R/100)^T - P", "Profit% = (Profit/CP)×100", "Discount% = (Discount/MP)×100", "Speed = Distance/Time", "Average = Sum/Count", "Probability = Favorable/Total outcomes"] },
-  ],
-  english: [
-    { title: "Common Error Types", points: ["Subject-Verb Agreement errors", "Tense consistency within passages", "Misplaced modifiers", "Dangling participles", "Parallelism in lists and comparisons", "Pronoun-antecedent agreement", "Articles (a/an/the) with countable/uncountable nouns"] },
-  ],
-  reasoning: [
-    { title: "Key Patterns", points: ["Syllogism – All/Some/No + Venn diagrams", "Coding-Decoding – letter shift, number assignment", "Blood Relations – generation tree mapping", "Direction Sense – NESW grid tracking", "Seating Arrangement – linear & circular", "Inequality – coded (©=>, @=<) and direct", "Input-Output – step-by-step rearrangement"] },
-  ],
-};
+// ═══════════════════════════════════════════════════════════
+// SYSTEM PROMPT FOR AI QUESTION GENERATION
+// ═══════════════════════════════════════════════════════════
+function buildPrompt(subject, count, usedQuestions) {
+  const base = {
+    ga: `Generate ${count} MCQs for RBI Grade B Phase 1 General Awareness section.
+CRITICAL RULES:
+- GA in RBI Grade B covers LAST 6 MONTHS of current affairs (Nov 2025 – Apr 2026), banking awareness, static GK
+- Focus areas: RBI policies/circulars/notifications, banking industry updates, govt schemes launched/modified, international summits/agreements, awards & appointments, books & authors, sports events, defence exercises, economic indicators (GDP, inflation, fiscal deficit), Union Budget 2025-26 highlights, important committees, financial institution headquarters & heads
+- Mix: ~50% current affairs (last 6 months), ~30% banking/financial awareness, ~20% static GK
+- Difficulty: Moderate to Hard (RBI Grade B level, not SBI PO level)
+- Style: Similar to actual RBI Grade B PYQs — specific, factual, no vague options
+- AVOID generic trivia. Focus on banking/economy/governance current affairs`,
 
-// System prompt for generating questions
-function buildSystemPrompt(subject, count) {
-  const subjectLabel = SUBJECTS.find(s => s.id === subject)?.label || subject;
-  return `You are an RBI Grade B exam question generator. Generate exactly ${count} multiple choice questions for the subject: ${subjectLabel}.
+    esi: `Generate ${count} MCQs for RBI Grade B Phase 2 Economic & Social Issues (ESI).
+CRITICAL RULES:
+- Cover: National Income measurement (GDP, GNP, NNP, GVA), Poverty & Unemployment, Financial Inclusion (PMJDY, MUDRA, etc.), Indian Banking System, Monetary Policy (repo, reverse repo, CRR, SLR, LAF, MSF), Fiscal Policy (budget, taxation, FRBM), BOP & External Sector, Inflation targeting, Sustainable Development & SDGs, Social Sector (health, education, HDI), Digital Payments ecosystem, Agricultural sector reforms, Industrial policy, Environmental issues
+- Include recent data: current repo rate, GDP growth rate, inflation figures, fiscal deficit targets
+- RBI Grade B Mains level difficulty — analytical, not just recall
+- Some questions should test understanding of concepts, not just definitions`,
 
-IMPORTANT RULES:
-- Questions should match RBI Grade B Phase 1 exam difficulty
-- Each question must have exactly 4 options (A, B, C, D)
-- Include the correct answer and a brief explanation
-- Cover diverse topics within the subject
-- For General Awareness: focus on banking, RBI policies, current economic affairs, government schemes, international organizations
-- For ESI: focus on Indian economy, social issues, poverty, financial inclusion, monetary policy
-- For FM: focus on banking regulation, financial markets, management theories, RBI guidelines
-- Questions should be factual and have ONE definitively correct answer
+    fm: `Generate ${count} MCQs for RBI Grade B Phase 2 Finance & Management.
+CRITICAL RULES:
+- Finance topics: RBI structure & functions (RBI Act 1934 sections), Banking Regulation Act 1949, SEBI & capital markets, G-Secs & money market instruments, T-Bills, NPA classification & resolution (IBC, SARFAESI), Basel III norms, NBFC regulations, FinTech & digital banking, Payment & Settlement systems (RTGS, NEFT, UPI), Financial derivatives, Credit rating, ALM, Priority Sector Lending, KYC/AML, Deposit insurance (DICGC)
+- Management topics: Planning/Organizing/Staffing/Directing/Controlling, Motivation theories (Maslow, Herzberg, McGregor), Leadership styles, Communication, SWOT/PESTEL/BCG/Porter's Five Forces, MBO, Change Management, Corporate Governance, Ethics at workplace, CSR, Organizational Behavior, HRM concepts
+- Include recent: FinTech regulations, CBDC developments, recent RBI circulars`,
 
-Respond ONLY with a JSON array, no other text, no markdown backticks. Each element:
-{"id":1,"question":"...","options":{"A":"...","B":"...","C":"...","D":"..."},"correct":"A","explanation":"..."}`;
+    quant: `Generate ${count} MCQs for RBI Grade B Phase 1 Quantitative Aptitude.
+CRITICAL RULES:
+- Focus areas: Data Interpretation (bar/line/pie/table/caselet based — HIGH weightage), Number Series (wrong number, missing number), Simplification/Approximation, Quadratic Equations, Arithmetic (Profit-Loss, SI-CI, Time-Work, Time-Speed-Distance, Mixtures, Partnerships, Percentages, Ratio-Proportion, Ages, Averages, Mensuration)
+- DI should be 30-40% of questions
+- Difficulty: Higher than SBI PO, needs calculation-heavy problems
+- Include data sets for DI questions (provide the data in the question text)`,
+
+    english: `Generate ${count} MCQs for RBI Grade B Phase 1 English Language.
+CRITICAL RULES:
+- Focus areas: Reading Comprehension (economy/banking/policy themed passages), Error Spotting (grammar errors in sentences), Sentence Improvement, Fill in the blanks (vocabulary & grammar), Cloze Test, Para Jumbles, Sentence Connectors, Vocabulary (synonyms, antonyms, idioms)
+- Difficulty: Graduate level, formal English, banking/economy context
+- Error spotting should test: Subject-verb agreement, tense, articles, prepositions, modifiers
+- Vocabulary should be advanced but practical (words seen in RBI reports/economic writing)`,
+
+    reasoning: `Generate ${count} MCQs for RBI Grade B Phase 1 Reasoning Ability.
+CRITICAL RULES:
+- Focus areas: Puzzles & Seating Arrangement (linear, circular — HIGH weightage), Syllogism, Coding-Decoding, Blood Relations, Direction & Distance, Inequalities (coded), Input-Output, Data Sufficiency, Order & Ranking, Number/Alphabet based problems, Logical reasoning
+- Puzzles should be 30-40% of questions, with proper clue-based scenarios
+- Difficulty: Higher than IBPS PO, similar to RBI Grade B PYQ pattern
+- For puzzles: provide complete scenario with 5-7 variables and conditions`,
+  };
+
+  let prompt = base[subject] || base.ga;
+  
+  if (usedQuestions && usedQuestions.length > 0) {
+    prompt += `\n\nIMPORTANT — DO NOT REPEAT these previously asked questions:\n${usedQuestions}\n\nGenerate COMPLETELY DIFFERENT questions on different sub-topics.`;
+  }
+
+  prompt += `\n\nRespond with ONLY a JSON array. No markdown, no backticks, no other text.
+Each element: {"id":1,"question":"...","options":{"A":"...","B":"...","C":"...","D":"..."},"correct":"A","explanation":"...","topic":"sub-topic name"}`;
+
+  return prompt;
 }
 
-// Fallback questions if API fails
-const FALLBACK_QUESTIONS = {
+// ═══════════════════════════════════════════════════════════
+// COMPREHENSIVE REVISION NOTES (EXPANDED)
+// ═══════════════════════════════════════════════════════════
+const REVISION_NOTES = {
+  ga: [
+    { title: "RBI — Structure & Key Facts", points: [
+      "Established: 1 April 1935, under RBI Act 1934",
+      "Nationalized: 1 January 1949",
+      "HQ: Mumbai (Mint Street → Shahid Bhagat Singh Marg)",
+      "Current Governor: search for latest — changes periodically",
+      "4 Deputy Governors at any time",
+      "21 Regional offices across India",
+      "RBI's financial year: April to March",
+      "Official Seal: emblem of the East India Company's double mohur gold coin (Tiger & Palm tree)",
+      "Section 22 — Sole authority to issue bank notes",
+      "Section 42 — CRR, Section 24 — SLR",
+    ]},
+    { title: "Important Banking Terms", points: [
+      "CASA Ratio — Current Account + Savings Account deposits as % of total deposits",
+      "NIM — Net Interest Margin = (Interest Earned - Interest Expended) / Average Earning Assets",
+      "GNPA — Gross NPA = Total NPAs / Gross Advances",
+      "NNPA — Net NPA = (Gross NPA - Provisions) / (Gross Advances - Provisions)",
+      "ROA — Return on Assets = Net Profit / Total Assets",
+      "ROE — Return on Equity = Net Profit / Shareholders' Equity",
+      "CRAR = (Tier 1 + Tier 2 Capital) / Risk Weighted Assets",
+      "PCR — Provision Coverage Ratio = Total Provisions / Gross NPAs",
+      "MCLR — Marginal Cost of Funds Based Lending Rate (replaced Base Rate in 2016)",
+      "EBR — External Benchmark Rate (linked to repo rate, mandatory since Oct 2019)",
+    ]},
+    { title: "Important Committees", points: [
+      "Narasimham Committee I (1991) — Banking reforms, reduce CRR/SLR, deregulate interest rates",
+      "Narasimham Committee II (1998) — Strengthening banking system, merger of strong banks",
+      "Urjit Patel Committee (2014) — Inflation targeting framework, recommended CPI as anchor",
+      "PJ Nayak Committee (2014) — Governance of bank boards",
+      "Damodaran Committee (2011) — Customer service in banks",
+      "Nachiket Mor Committee (2014) — Financial inclusion, payments bank concept",
+      "YH Malegam Committee (2010) — Microfinance institutions",
+      "Bimal Jalan Committee (2019) — Economic Capital Framework of RBI",
+      "KV Kamath Committee (2020) — COVID-19 loan restructuring parameters",
+      "Internal Working Group (2020) — Ownership & corporate structure of private banks",
+    ]},
+    { title: "International Organizations", points: [
+      "IMF — HQ Washington DC, 190 members, SDR basket (USD, EUR, CNY, JPY, GBP), MD: check latest",
+      "World Bank Group — IBRD, IDA, IFC, MIGA, ICSID, HQ Washington DC",
+      "ADB — HQ Manila, Philippines, 68 members, established 1966",
+      "NDB (New Development Bank) — BRICS bank, HQ Shanghai, established 2014",
+      "AIIB — HQ Beijing, 109 members, established 2016",
+      "BIS — Bank for International Settlements, HQ Basel, Switzerland (central bank for central banks)",
+      "FSB — Financial Stability Board, HQ Basel, G20 body monitoring global financial system",
+      "FATF — Financial Action Task Force, HQ Paris, AML/CFT standards",
+      "WTO — HQ Geneva, 164 members, DG: check latest",
+      "UNCTAD — HQ Geneva, promotes developing country integration into world economy",
+    ]},
+    { title: "Constitutional & Statutory Bodies", points: [
+      "CAG — Art 148, auditor of all govt accounts",
+      "UPSC — Art 315, recruitment to central services",
+      "Election Commission — Art 324, conducts elections",
+      "Finance Commission — Art 280, centre-state revenue distribution, constituted every 5 years",
+      "GST Council — Art 279A, chaired by Union FM",
+      "NITI Aayog — Replaced Planning Commission (2015), think tank",
+      "National Human Rights Commission — Protection of Human Rights Act 1993",
+      "Lokpal — At centre, Lokayukta at state level",
+      "CVC — Central Vigilance Commission, anti-corruption statutory body",
+      "NCLT — National Company Law Tribunal, adjudicates IBC cases",
+    ]},
+    { title: "Static GK — India Quick Facts", points: [
+      "Total States: 28, UTs: 8",
+      "Largest state by area: Rajasthan, by population: UP",
+      "Longest river: Ganga (in India), Brahmaputra (by discharge)",
+      "India's rank in area: 7th, population: 1st (overtook China 2023)",
+      "Tropic of Cancer passes through 8 states: Gujarat, Rajasthan, MP, Chhattisgarh, Jharkhand, WB, Tripura, Mizoram",
+      "National Animal: Bengal Tiger, National Bird: Peacock",
+      "India's first satellite: Aryabhata (1975), Space agency: ISRO (est. 1969)",
+      "First bank in India: Bank of Hindustan (1770), first nationalized: Imperial Bank → SBI (1955)",
+      "Parliament: Lok Sabha (543 elected) + Rajya Sabha (245)",
+      "Supreme Court: CJI + 33 judges (max 34 including CJI)",
+    ]},
+    { title: "Awards & Sports — Key Facts", points: [
+      "Bharat Ratna — Highest civilian award, no monetary grant",
+      "Padma Awards — Padma Vibhushan > Padma Bhushan > Padma Shri",
+      "Nobel Peace Prize 2024, Pulitzer, Man Booker — check latest winners",
+      "Arjuna Award — outstanding sports performance, Dronacharya — coaching",
+      "Khel Ratna (now Major Dhyan Chand Khel Ratna) — highest sporting honour",
+      "Cricket World Cup 2023 — hosted by India, won by Australia",
+      "Olympic 2024 Paris — India's medals: check latest",
+      "FIFA — HQ Zurich, ICC — HQ Dubai, IOC — HQ Lausanne",
+    ]},
+  ],
   esi: [
-    {id:1,question:"What is the current inflation target set by the RBI under the Monetary Policy Framework?",options:{A:"2% ± 1%",B:"4% ± 2%",C:"6% ± 2%",D:"3% ± 1%"},correct:"B",explanation:"RBI targets CPI inflation at 4% with a tolerance band of ±2% (2%-6%)."},
-    {id:2,question:"Which committee recommended the adoption of inflation targeting in India?",options:{A:"Narasimham Committee",B:"Urjit Patel Committee",C:"YV Reddy Committee",D:"Raghuram Rajan Committee"},correct:"B",explanation:"The Urjit Patel Committee (2014) recommended inflation targeting with CPI as the nominal anchor."},
-    {id:3,question:"MUDRA loan category 'Kishore' covers loans up to what amount?",options:{A:"₹50,000",B:"₹2,00,000",C:"₹5,00,000",D:"₹10,00,000"},correct:"C",explanation:"Kishore covers loans from ₹50,001 to ₹5,00,000 under the MUDRA scheme."},
-    {id:4,question:"What is the minimum Capital Adequacy Ratio (CAR) prescribed by RBI for Indian banks under Basel III?",options:{A:"8%",B:"9%",C:"10.5%",D:"12%"},correct:"C",explanation:"RBI mandates a minimum CAR of 10.5% for Indian banks, higher than the Basel III global minimum of 8%."},
-    {id:5,question:"Which Act governs the resolution of insolvency in India?",options:{A:"SARFAESI Act 2002",B:"Recovery of Debts Act 1993",C:"Insolvency and Bankruptcy Code 2016",D:"Banking Regulation Act 1949"},correct:"C",explanation:"IBC 2016 provides a time-bound process for insolvency resolution of companies and individuals."},
-    {id:6,question:"What does FEMA stand for?",options:{A:"Foreign Exchange Management Act",B:"Federal Economic Monetary Authority",C:"Financial Exchange Monitoring Act",D:"Foreign Economic Management Authority"},correct:"A",explanation:"FEMA (1999) replaced FERA and governs foreign exchange transactions in India."},
-    {id:7,question:"Which of the following is NOT a component of the Current Account in Balance of Payments?",options:{A:"Trade in goods",B:"Trade in services",C:"Foreign Direct Investment",D:"Remittances"},correct:"C",explanation:"FDI falls under the Capital/Financial Account, not the Current Account."},
-    {id:8,question:"Prompt Corrective Action (PCA) framework is triggered based on which parameters?",options:{A:"Capital, Asset Quality, Profitability",B:"Capital, Liquidity, Market Share",C:"Asset Quality, Deposits, Advances",D:"Profitability, NPA, Market Cap"},correct:"A",explanation:"PCA is triggered based on Capital (CRAR), Asset Quality (Net NPA), and Profitability (ROA)."},
-    {id:9,question:"Under PMJJBY, what is the annual premium for a life insurance cover of ₹2 lakh?",options:{A:"₹330",B:"₹436",C:"₹500",D:"₹250"},correct:"B",explanation:"PMJJBY provides ₹2 lakh life cover for a premium of ₹436 per annum."},
-    {id:10,question:"An asset is classified as NPA if it remains overdue for more than how many days?",options:{A:"30 days",B:"60 days",C:"90 days",D:"120 days"},correct:"C",explanation:"As per RBI guidelines, a loan account is classified as NPA if interest/principal remains overdue for more than 90 days."},
+    { title: "National Income Concepts", points: [
+      "GDP = Total value of goods & services produced within country in a year",
+      "GNP = GDP + Net Factor Income from Abroad (NFIA)",
+      "NNP = GNP - Depreciation (also called National Income at factor cost)",
+      "Per Capita Income = National Income / Population",
+      "GVA (Gross Value Added) = GDP at basic prices (new method since 2015, base year 2011-12)",
+      "GDP at Market Price = GVA + Net Taxes on Products",
+      "Three methods: Production/Value Added, Income, Expenditure",
+      "GDP Expenditure method: C + I + G + (X-M)",
+      "CSO (now NSO — National Statistical Office) calculates GDP",
+      "Advance Estimate → First Revised → Second Revised → Third Revised",
+    ]},
+    { title: "Monetary Policy Framework", points: [
+      "RBI's primary objective: Price Stability (inflation targeting)",
+      "CPI inflation target: 4% ± 2% (2% floor, 6% ceiling)",
+      "MPC — 6 members: 3 from RBI (Governor as chair) + 3 external (appointed by GoI)",
+      "MPC meets at least 4 times a year (bi-monthly), decision by majority vote",
+      "Repo Rate — rate RBI lends to banks (main policy rate)",
+      "Reverse Repo — rate RBI borrows from banks (now replaced by SDF)",
+      "SDF (Standing Deposit Facility) — floor of LAF corridor (since Apr 2022)",
+      "MSF — Marginal Standing Facility, ceiling of LAF corridor (repo + 0.25%)",
+      "CRR — Cash Reserve Ratio, % of NDTL with RBI (no interest paid)",
+      "SLR — Statutory Liquidity Ratio, % of NDTL in gold/govt securities",
+      "Open Market Operations (OMO) — RBI buys/sells govt securities to manage liquidity",
+      "LAF — Liquidity Adjustment Facility (repo + reverse repo window)",
+    ]},
+    { title: "Fiscal Policy & Budget", points: [
+      "Fiscal Deficit = Total Expenditure - Total Receipts (excl. borrowings)",
+      "Revenue Deficit = Revenue Expenditure - Revenue Receipts",
+      "Primary Deficit = Fiscal Deficit - Interest Payments",
+      "Effective Revenue Deficit = Revenue Deficit - Grants for creation of capital assets",
+      "FRBM Act 2003 — Fiscal Responsibility & Budget Management",
+      "FRBM target: Fiscal Deficit at 3% of GDP (often exceeded)",
+      "Revenue Receipts: Tax (direct + indirect) + Non-tax (dividends, fees)",
+      "Capital Receipts: Borrowings, disinvestment, loan recovery",
+      "Revenue Expenditure: Salaries, interest payments, subsidies, pensions",
+      "Capital Expenditure: Infra, asset creation, loans to states",
+      "Union Budget presented on 1 February each year",
+      "GST — implemented 1 July 2017, subsumed 17 taxes, 4 slabs (5/12/18/28%)",
+    ]},
+    { title: "Balance of Payments & External Sector", points: [
+      "BoP = Current Account + Capital Account + Errors & Omissions",
+      "Current Account: Trade balance + Services + Primary Income + Secondary Income (remittances)",
+      "Capital Account: FDI, FPI, ECBs, NRI deposits, Govt aid",
+      "FDI — 10%+ equity stake, long-term, more stable",
+      "FPI — <10% stake, portfolio investment, volatile ('hot money')",
+      "CAD — Current Account Deficit: imports > exports",
+      "India's CAD usually 1-3% of GDP",
+      "FEMA 1999 — governs forex transactions, replaced FERA 1973",
+      "RBI manages forex reserves (Forex + Gold + SDRs + Reserve Position in IMF)",
+      "ECBs — External Commercial Borrowings, regulated by RBI under FEMA",
+      "DTAA — Double Taxation Avoidance Agreement",
+      "REER — Real Effective Exchange Rate (trade-weighted, inflation-adjusted)",
+    ]},
+    { title: "Financial Inclusion & Govt Schemes", points: [
+      "PMJDY — Pradhan Mantri Jan Dhan Yojana (Aug 2014), zero balance accounts, RuPay card, ₹10K overdraft",
+      "PMJJBY — Jeevan Jyoti Bima Yojana, ₹2L life cover, premium ₹436/yr, age 18-50",
+      "PMSBY — Suraksha Bima Yojana, ₹2L accidental death, premium ₹20/yr, age 18-70",
+      "APY — Atal Pension Yojana, guaranteed pension ₹1K-5K/month post-60, for unorganized sector",
+      "MUDRA — Micro Units Development & Refinance Agency",
+      "  Shishu: up to ₹50,000 | Kishore: ₹50K-5L | Tarun: ₹5L-10L (updated to ₹20L)",
+      "Stand-Up India — SC/ST/Women entrepreneurs, loans ₹10L-1Cr",
+      "PM-SVANidhi — Street vendor micro-credit scheme (₹10K → ₹20K → ₹50K)",
+      "PMAY — Housing for All, urban & rural (Gramin)",
+      "PM-KISAN — ₹6,000/year to farmer families in 3 installments",
+      "DBT — Direct Benefit Transfer via Aadhaar-linked accounts",
+    ]},
+    { title: "Poverty, Unemployment & Social Development", points: [
+      "Tendulkar Committee (2009) — Poverty line: ₹816/month (rural), ₹1000/month (urban)",
+      "Rangarajan Committee (2014) — ₹972 (rural), ₹1407 (urban) per capita/month",
+      "Multidimensional Poverty Index (MPI) — NITI Aayog + UNDP/OPHI",
+      "India reduced poverty significantly: ~13.5 crore people escaped MPI poverty (2015-21)",
+      "MGNREGA — 100 days guaranteed employment, rural, unskilled manual work",
+      "Unemployment rate — PLFS (Periodic Labour Force Survey) by NSO",
+      "Types: Structural, Frictional, Cyclical, Disguised (agriculture), Seasonal",
+      "HDI — UNDP, measures health (life expectancy), education, income",
+      "India's HDI ranking: ~134 out of 193 (check latest UNDP report)",
+      "Gini Coefficient — 0 (perfect equality) to 1 (perfect inequality)",
+      "SDGs — 17 Sustainable Development Goals, target 2030, adopted 2015",
+    ]},
+    { title: "Banking System & NPAs", points: [
+      "Scheduled Commercial Banks: Public (12), Private (21), Foreign, SFBs (12), Payment Banks",
+      "NPA classification: Substandard (<12 months), Doubtful (>12 months), Loss",
+      "90-day overdue norm for NPA classification",
+      "IBC 2016 — time-bound resolution (330 days max), NCLT adjudicates",
+      "SARFAESI Act 2002 — secured creditors can take possession of assets without court",
+      "DRT Act 1993 — Debt Recovery Tribunals for banks",
+      "PCA Framework — Prompt Corrective Action based on Capital, Asset Quality, Profitability",
+      "ARC — Asset Reconstruction Company (buys NPAs at discount)",
+      "NARCL — National ARC (bad bank), IDRCL — India Debt Resolution Company",
+      "Write-off ≠ Waiver — bank removes from books but recovery continues",
+    ]},
+    { title: "Digital Payments & FinTech", points: [
+      "UPI — Unified Payments Interface, real-time, interoperable, NPCI operated",
+      "UPI Lite — small-value offline transactions (up to ₹500 per txn)",
+      "IMPS — Immediate Payment Service, 24x7, up to ₹5L",
+      "RTGS — Real Time Gross Settlement, minimum ₹2L, 24x7 since Dec 2020",
+      "NEFT — National Electronic Funds Transfer, 24x7 since Dec 2019, no minimum",
+      "CBDC — Central Bank Digital Currency (e-Rupee), RBI's digital fiat currency",
+      "  e₹-W (wholesale) launched Nov 2022, e₹-R (retail) Dec 2022",
+      "NPCI — National Payments Corporation of India (UPI, RuPay, BBPS, NACH, etc.)",
+      "Account Aggregator Framework — consent-based financial data sharing (RBI regulated)",
+      "Regulatory Sandbox — RBI framework for testing FinTech innovations",
+      "Digital Lending Guidelines (2022) — all disbursals/repayments through bank accounts",
+    ]},
   ],
   fm: [
-    {id:1,question:"When was the Reserve Bank of India established?",options:{A:"1 January 1935",B:"1 April 1935",C:"1 April 1949",D:"15 August 1947"},correct:"B",explanation:"RBI was established on 1 April 1935 under the RBI Act, 1934."},
-    {id:2,question:"Which section of the RBI Act deals with CRR?",options:{A:"Section 18",B:"Section 24",C:"Section 42",D:"Section 35A"},correct:"C",explanation:"Section 42 of the RBI Act 1934 empowers RBI to prescribe CRR for scheduled commercial banks."},
-    {id:3,question:"T+1 settlement cycle means trades are settled within:",options:{A:"Same day",B:"One business day",C:"Two business days",D:"Three business days"},correct:"B",explanation:"T+1 means settlement happens on the next business day after the trade date."},
-    {id:4,question:"Which of the following is a zero-coupon instrument?",options:{A:"Government dated securities",B:"Treasury Bills",C:"State Development Loans",D:"Sovereign Gold Bonds"},correct:"B",explanation:"T-Bills are issued at a discount and redeemed at par, making them zero-coupon instruments."},
-    {id:5,question:"Porter's Five Forces does NOT include which of the following?",options:{A:"Threat of new entrants",B:"Bargaining power of employees",C:"Bargaining power of suppliers",D:"Threat of substitutes"},correct:"B",explanation:"Porter's Five Forces: rivalry, new entrants, substitutes, buyer power, supplier power. Employee bargaining is not one of them."},
-    {id:6,question:"In Maslow's hierarchy, which need comes after Safety needs?",options:{A:"Physiological",B:"Esteem",C:"Social/Belongingness",D:"Self-actualization"},correct:"C",explanation:"The order: Physiological → Safety → Social/Belongingness → Esteem → Self-actualization."},
-    {id:7,question:"SEBI was established as a statutory body in which year?",options:{A:"1988",B:"1990",C:"1992",D:"1995"},correct:"C",explanation:"SEBI was given statutory powers through the SEBI Act, 1992."},
-    {id:8,question:"What does ASBA stand for in the context of IPOs?",options:{A:"Automated System for Bank Applications",B:"Application Supported by Blocked Amount",C:"Asset Secured Banking Arrangement",D:"Allotment System for Bid Applications"},correct:"B",explanation:"ASBA allows the application money to remain in the investor's bank account until allotment."},
-    {id:9,question:"McGregor's Theory Y assumes that employees are:",options:{A:"Lazy and need supervision",B:"Self-motivated and enjoy work",C:"Only motivated by money",D:"Resistant to change"},correct:"B",explanation:"Theory Y assumes employees are self-directed, creative, and intrinsically motivated."},
-    {id:10,question:"Ways and Means Advances are provided by RBI to:",options:{A:"Commercial Banks",B:"State & Central Government",C:"NBFCs",D:"Foreign Banks"},correct:"B",explanation:"WMA is a temporary loan facility provided by RBI to the government to bridge temporary mismatches in receipts and payments."},
-  ],
-  ga: [
-    {id:1,question:"The Narasimham Committee I (1991) was related to:",options:{A:"Taxation reform",B:"Banking sector reform",C:"Agricultural reform",D:"Industrial policy"},correct:"B",explanation:"Narasimham Committee I recommended banking reforms including reducing CRR/SLR, deregulation of interest rates, and entry of private banks."},
-    {id:2,question:"Where is the headquarters of the Asian Infrastructure Investment Bank (AIIB)?",options:{A:"Manila",B:"Washington DC",C:"Beijing",D:"Shanghai"},correct:"C",explanation:"AIIB is headquartered in Beijing, China. (NDB is in Shanghai.)"},
-    {id:3,question:"Article 280 of the Indian Constitution relates to:",options:{A:"Election Commission",B:"Finance Commission",C:"UPSC",D:"CAG"},correct:"B",explanation:"Article 280 provides for the constitution of a Finance Commission every five years."},
-    {id:4,question:"The 16th Finance Commission recommends devolution of what percentage of central taxes to states?",options:{A:"32%",B:"38%",C:"41%",D:"50%"},correct:"C",explanation:"The 15th FC recommended 41% devolution. The 16th FC (for 2026-31) is being constituted."},
-    {id:5,question:"Which body replaced the Planning Commission of India?",options:{A:"Finance Commission",B:"NITI Aayog",C:"National Development Council",D:"Economic Advisory Council"},correct:"B",explanation:"NITI Aayog (National Institution for Transforming India) replaced Planning Commission in 2015."},
-    {id:6,question:"GST Council is constituted under which Article?",options:{A:"Art 246A",B:"Art 269A",C:"Art 279A",D:"Art 280"},correct:"C",explanation:"GST Council is a constitutional body under Article 279A, chaired by the Union Finance Minister."},
-    {id:7,question:"Which committee recommended improvements in customer service in banks?",options:{A:"Damodaran Committee",B:"Nachiket Mor Committee",C:"PJ Nayak Committee",D:"SS Mundra Committee"},correct:"A",explanation:"The Damodaran Committee was set up to look into customer service in banks."},
-    {id:8,question:"The SDR basket of IMF includes how many currencies?",options:{A:"3",B:"4",C:"5",D:"6"},correct:"C",explanation:"SDR basket: USD, EUR, CNY (added 2016), JPY, GBP – 5 currencies."},
-    {id:9,question:"BIS (Bank for International Settlements) is headquartered in:",options:{A:"Geneva",B:"Basel",C:"Zurich",D:"Brussels"},correct:"B",explanation:"BIS, often called the central bank for central banks, is headquartered in Basel, Switzerland."},
-    {id:10,question:"Who appoints the CAG of India?",options:{A:"Prime Minister",B:"President",C:"Chief Justice",D:"Parliament"},correct:"B",explanation:"CAG is appointed by the President of India under Article 148 of the Constitution."},
+    { title: "RBI — Functions & Regulatory Framework", points: [
+      "Monetary Authority — formulates & implements monetary policy",
+      "Issuer of Currency — Section 22, RBI Act 1934 (except ₹1 coin/note by GoI)",
+      "Banker to Government — maintains govt accounts, handles debt management",
+      "Banker's Bank — maintains CRR, provides lender of last resort facility",
+      "Regulator of Banking — Banking Regulation Act 1949",
+      "Foreign Exchange Management — under FEMA 1999",
+      "Developmental Role — financial inclusion, priority sector lending",
+      "Payment & Settlement Systems — Payment & Settlement Systems Act 2007",
+      "Section 17 — Business which RBI may transact",
+      "Section 18 — Emergency loans (lender of last resort)",
+      "Section 35A — Directions to banks (BR Act)",
+      "Section 36 — Power to inspect books of banking companies",
+    ]},
+    { title: "Basel Norms", points: [
+      "Basel Committee on Banking Supervision (BCBS) — under BIS, Basel",
+      "Basel I (1988) — Minimum 8% CAR, focused on credit risk only",
+      "Basel II (2004) — 3 Pillars: Minimum Capital, Supervisory Review, Market Discipline",
+      "Basel III (2010, post-GFC) — Enhanced capital & liquidity requirements:",
+      "  Min CET1: 4.5%, Tier 1: 6%, Total CAR: 8% (global)",
+      "  RBI: Min CET1 5.5%, Tier 1 7%, Total CAR 9% + CCB 2.5% = 11.5%",
+      "  Capital Conservation Buffer (CCB): 2.5%",
+      "  Countercyclical Buffer: 0-2.5% (at discretion of national regulators)",
+      "  D-SIB surcharge: additional capital for systemically important banks",
+      "LCR — Liquidity Coverage Ratio: High Quality Liquid Assets / Net Cash Outflows ≥ 100%",
+      "NSFR — Net Stable Funding Ratio: Available Stable Funding / Required Stable Funding ≥ 100%",
+      "Leverage Ratio: Tier 1 Capital / Total Exposure ≥ 3% (RBI: 4%)",
+    ]},
+    { title: "Capital & Money Markets", points: [
+      "Money Market — short-term (<1 year): Call Money, T-Bills, CP, CD, Repo, CBLO/TREPS",
+      "Call Money — overnight interbank lending (only banks & PDs participate)",
+      "Notice Money — 2-14 days interbank",
+      "T-Bills — 91, 182, 364 days, zero coupon, auctioned by RBI",
+      "Commercial Paper (CP) — unsecured promissory note, min ₹5L, 7-365 days",
+      "Certificate of Deposit (CD) — by banks, min ₹1L, 7 days to 1 year",
+      "TREPS — Triparty Repo, CCIL facilitated, replaced CBLO",
+      "Capital Market — long-term: equity, debt, derivatives",
+      "Primary Market: IPO, FPO, Rights Issue, OFS, Private Placement",
+      "Secondary Market: BSE (1875, oldest in Asia), NSE (1992)",
+      "SEBI — Regulator, est. 1988 (statutory body 1992)",
+      "T+1 settlement cycle (India moved to T+1 in Jan 2023)",
+      "Circuit Breakers: 10%, 15%, 20% on Sensex/Nifty",
+    ]},
+    { title: "Government Securities & Debt Instruments", points: [
+      "G-Secs — sovereign debt issued by GoI, backed by govt guarantee",
+      "Dated Securities — medium/long-term (5-40 years), semi-annual coupon",
+      "T-Bills — short-term, zero coupon: 91-day, 182-day, 364-day",
+      "SDL — State Development Loans, issued by state govts, auctioned by RBI",
+      "Cash Management Bills (CMBs) — <91 days, ad hoc, for temporary cash mismatches",
+      "Floating Rate Bonds — coupon linked to T-Bill/repo rate",
+      "Sovereign Gold Bonds (SGB) — 2.5% fixed interest + gold price appreciation, 8-yr tenure",
+      "STRIPS — Separate Trading of Registered Interest and Principal of Securities",
+      "NDS-OM — Negotiated Dealing System - Order Matching (electronic platform for G-Secs)",
+      "Ways and Means Advances — RBI's short-term credit to Centre/States",
+      "Yield Curve — normally upward sloping; inverted yield curve signals recession",
+      "Dirty Price vs Clean Price — Dirty = Clean + Accrued Interest",
+    ]},
+    { title: "Priority Sector Lending & NBFC Regulations", points: [
+      "PSL target: 40% of ANBC (Adjusted Net Bank Credit) for domestic banks",
+      "75% for RRBs and SFBs",
+      "Categories: Agriculture (18%), Micro Enterprises (7.5%), Weaker Sections (12%), Education, Housing, Export credit, Renewable Energy, Others",
+      "PSLC — Priority Sector Lending Certificates (tradable on e-Kuber platform)",
+      "NBFC registration with RBI mandatory if assets ≥ ₹500 crore (or deposit-taking)",
+      "Scale-Based Regulation: NBFC-BL (Base Layer), NBFC-ML (Middle), NBFC-UL (Upper), NBFC-TL (Top)",
+      "NBFC-UL treated almost like banks — higher governance, capital requirements",
+      "HFC regulated by NHB, Microfinance by RBI (post harmonized framework 2022)",
+      "Core Investment Company (CIC) — NBFC holding ≥90% assets as investments in group companies",
+    ]},
+    { title: "Management Theories — Motivation", points: [
+      "Maslow's Hierarchy: Physiological → Safety → Social → Esteem → Self-actualization",
+      "Herzberg's Two-Factor: Hygiene factors (salary, conditions) prevent dissatisfaction; Motivators (achievement, recognition) drive satisfaction",
+      "McGregor's Theory X (people are lazy, need control) vs Theory Y (people are self-motivated)",
+      "Vroom's Expectancy Theory: Motivation = Expectancy × Instrumentality × Valence",
+      "McClelland's Needs: Achievement (nAch), Affiliation (nAff), Power (nPow)",
+      "Adam's Equity Theory: People compare input/output ratio with others",
+      "Skinner's Reinforcement Theory: Positive/negative reinforcement, punishment, extinction",
+      "Ouchi's Theory Z: Japanese-style mgmt — lifetime employment, collective decision-making",
+      "ERG Theory (Alderfer): Existence, Relatedness, Growth — modification of Maslow",
+    ]},
+    { title: "Management Theories — Leadership & Strategy", points: [
+      "Autocratic — leader makes all decisions, tight control",
+      "Democratic/Participative — team involvement in decisions",
+      "Laissez-faire — minimal leader interference, full delegation",
+      "Transformational — inspires change, vision-driven (vs Transactional — rewards/punishments)",
+      "Situational Leadership (Hersey-Blanchard): style depends on follower maturity",
+      "Contingency Theory (Fiedler): effectiveness depends on situation-leader match",
+      "SWOT Analysis — Strengths, Weaknesses (internal), Opportunities, Threats (external)",
+      "PESTEL — Political, Economic, Social, Technological, Environmental, Legal",
+      "Porter's Five Forces — Industry rivalry, Buyer power, Supplier power, Threat of new entrants, Substitutes",
+      "BCG Matrix — Stars (high growth, high share), Cash Cows (low growth, high share), Question Marks (high growth, low share), Dogs (low growth, low share)",
+      "MBO (Drucker) — Management by Objectives, participative goal-setting",
+      "14 Principles of Management — Henri Fayol (Division of work, Authority, Discipline, Unity of command, etc.)",
+    ]},
+    { title: "Corporate Governance & Ethics", points: [
+      "Corporate Governance — system of rules, practices directing/controlling companies",
+      "Board Independence — at least 1/3 independent directors (listed cos)",
+      "Audit Committee — mandatory, majority independent, financial literacy",
+      "CSR — Section 135, Companies Act 2013: ≥2% of avg net profit (last 3 yrs) if NW ≥500cr or TO ≥1000cr or Profit ≥5cr",
+      "Insider Trading — SEBI (PIT) Regulations, prohibition on trading with UPSI",
+      "Whistle-blower mechanism — mandatory for listed companies",
+      "OECD Principles of Corporate Governance — global benchmark",
+      "Kotak Committee (2017) — SEBI committee on corporate governance reforms",
+      "ESG — Environmental, Social, Governance factors in investing",
+      "BRSR — Business Responsibility and Sustainability Reporting (mandatory for top 1000 listed cos)",
+    ]},
   ],
   quant: [
-    {id:1,question:"A sum of ₹10,000 at 10% p.a. compound interest for 2 years gives an amount of:",options:{A:"₹12,000",B:"₹12,100",C:"₹11,000",D:"₹12,200"},correct:"B",explanation:"A = 10000(1+10/100)² = 10000 × 1.21 = ₹12,100."},
-    {id:2,question:"If the CP of an article is ₹400 and SP is ₹500, the profit percentage is:",options:{A:"20%",B:"25%",C:"30%",D:"15%"},correct:"B",explanation:"Profit = 500-400 = 100. Profit% = (100/400)×100 = 25%."},
-    {id:3,question:"A train 200m long crosses a pole in 10 seconds. Its speed is:",options:{A:"72 km/hr",B:"20 km/hr",C:"36 km/hr",D:"54 km/hr"},correct:"A",explanation:"Speed = 200/10 = 20 m/s = 20 × 18/5 = 72 km/hr."},
-    {id:4,question:"The average of first 50 natural numbers is:",options:{A:"25",B:"25.5",C:"26",D:"24.5"},correct:"B",explanation:"Average = (n+1)/2 = 51/2 = 25.5."},
-    {id:5,question:"If a:b = 2:3 and b:c = 4:5, then a:b:c is:",options:{A:"8:12:15",B:"2:3:5",C:"4:6:5",D:"8:12:10"},correct:"A",explanation:"Make b common: a:b = 8:12, b:c = 12:15. So a:b:c = 8:12:15."},
-    {id:6,question:"Simple Interest on ₹5000 at 8% for 3 years:",options:{A:"₹1000",B:"₹1200",C:"₹1500",D:"₹800"},correct:"B",explanation:"SI = 5000×8×3/100 = ₹1,200."},
-    {id:7,question:"Two pipes fill a tank in 12 and 15 hours. Together they fill in:",options:{A:"6 hrs",B:"6 hrs 40 min",C:"7 hrs",D:"5 hrs"},correct:"B",explanation:"Combined rate = 1/12 + 1/15 = 9/60 = 3/20. Time = 20/3 = 6 hrs 40 min."},
-    {id:8,question:"A shopkeeper marks goods 40% above CP and gives 20% discount. Profit%?",options:{A:"10%",B:"12%",C:"15%",D:"20%"},correct:"B",explanation:"Let CP=100, MP=140, SP=140×0.8=112. Profit=12%."},
-    {id:9,question:"Probability of getting a sum of 7 when two dice are thrown:",options:{A:"1/6",B:"5/36",C:"6/36",D:"7/36"},correct:"C",explanation:"Combinations for 7: (1,6)(2,5)(3,4)(4,3)(5,2)(6,1) = 6. P = 6/36 = 1/6."},
-    {id:10,question:"LCM of 12, 18, 24 is:",options:{A:"36",B:"48",C:"72",D:"96"},correct:"C",explanation:"12=2²×3, 18=2×3², 24=2³×3. LCM = 2³×3² = 72."},
+    { title: "Speed Math & Shortcuts", points: [
+      "% shortcuts: 10% = ÷10, 5% = half of 10%, 15% = 10% + 5%",
+      "Successive discounts: Two discounts a% and b% = (a+b-ab/100)%",
+      "Compound Interest shortcut: For 2 years, CI-SI = P(R/100)²",
+      "Rule of 72: Doubling time = 72/Rate",
+      "Ratio change: If ratio a:b changes by adding x to both → new ratio closer to 1:1",
+      "Average: If one number removed, new avg = (Sum - removed)/(n-1)",
+      "Time-Work: If A does in x days, B in y days, together = xy/(x+y) days",
+      "Boats & Streams: Downstream = u+v, Upstream = u-v, Still water speed = (D+U)/2",
+      "Train crossing: Same direction → relative speed = difference; Opposite → sum",
+      "Mixture alligation: (Cheaper qty)/(Dearer qty) = (Dearer price - Mean)/(Mean - Cheaper price)",
+    ]},
+    { title: "Data Interpretation — Key Types", points: [
+      "Bar Graph — read exact values, compare across categories",
+      "Line Graph — identify trends, rate of change, steepest slope",
+      "Pie Chart — convert % to actual values using total, compare sectors",
+      "Table — multi-variable data, calculate ratios, growth rates",
+      "Caselet DI — data given in paragraph form, need to extract & organize",
+      "Missing DI — some values missing, derive using relationships",
+      "Common calculations: Growth % = ((New-Old)/Old)×100",
+      "CAGR = (Final/Initial)^(1/n) - 1",
+      "Ratio analysis, % contribution, average of columns/rows",
+      "Practice tip: Round numbers for approximation to save time",
+    ]},
+    { title: "Number Series Patterns", points: [
+      "Arithmetic: constant difference (e.g., +5, +5, +5)",
+      "Geometric: constant ratio (e.g., ×2, ×2, ×2)",
+      "Difference of differences: 2nd level differences are constant",
+      "Squares/Cubes: 1,4,9,16,25... or 1,8,27,64...",
+      "Alternating operations: +2, ×3, +2, ×3...",
+      "Prime number based: 2,3,5,7,11,13...",
+      "Wrong number: Find the pattern, identify which breaks it",
+      "Fibonacci-type: each term = sum of previous two",
+      "n² ± n patterns: 2,6,12,20,30... (n(n+1))",
+      "Two-tier series: Differences themselves follow a pattern",
+    ]},
+    { title: "Key Formulas", points: [
+      "SI = PRT/100, Amount = P + SI",
+      "CI = P(1+R/100)^T - P, Amount = P(1+R/100)^T",
+      "Profit% = (Profit/CP)×100, Loss% = (Loss/CP)×100",
+      "SP = CP × (100+Profit%)/100 or CP × (100-Loss%)/100",
+      "Discount% = (Discount/MP)×100, SP = MP × (100-D%)/100",
+      "Speed = Distance/Time, 1 km/hr = 5/18 m/s",
+      "Avg Speed (same distance) = 2S₁S₂/(S₁+S₂)",
+      "Probability = Favorable outcomes / Total outcomes",
+      "Permutation: nPr = n!/(n-r)!, Combination: nCr = n!/(r!(n-r)!)",
+      "Area: Circle=πr², Triangle=½bh, Cylinder vol=πr²h, Sphere vol=4/3πr³",
+    ]},
   ],
   english: [
-    {id:1,question:"Choose the correct sentence:",options:{A:"Each of the boys have their own book",B:"Each of the boys has his own book",C:"Each of the boys have his own book",D:"Each of boys has their own book"},correct:"B",explanation:"'Each' is singular, so it takes 'has' and 'his' (singular pronoun)."},
-    {id:2,question:"The synonym of 'Ebullient' is:",options:{A:"Depressed",B:"Enthusiastic",C:"Calm",D:"Indifferent"},correct:"B",explanation:"Ebullient means cheerful and full of energy — enthusiastic."},
-    {id:3,question:"Choose the antonym of 'Benevolent':",options:{A:"Kind",B:"Generous",C:"Malevolent",D:"Charitable"},correct:"C",explanation:"Benevolent means well-meaning and kind; malevolent means having ill-will."},
-    {id:4,question:"Identify the error: 'The committee have decided to postpone the meeting.'",options:{A:"The committee",B:"have decided",C:"to postpone",D:"the meeting"},correct:"B",explanation:"'Committee' as a body acts as singular — 'has decided' is correct."},
-    {id:5,question:"'To burn the midnight oil' means:",options:{A:"To waste money",B:"To study/work late at night",C:"To cause a fire",D:"To sleep early"},correct:"B",explanation:"The idiom means to work or study late into the night."},
-    {id:6,question:"Fill in: 'He is senior ___ me by three years.'",options:{A:"than",B:"to",C:"from",D:"of"},correct:"B",explanation:"Senior/junior/prior/posterior take 'to', not 'than'."},
-    {id:7,question:"Which word is misspelt?",options:{A:"Occurrence",B:"Accomodation",C:"Embarrassment",D:"Maintenance"},correct:"B",explanation:"Correct spelling: Accommodation (double c, double m)."},
-    {id:8,question:"One word for 'a person who speaks two languages':",options:{A:"Multilingual",B:"Bilingual",C:"Polyglot",D:"Linguist"},correct:"B",explanation:"Bilingual = two languages, polyglot = many languages."},
-    {id:9,question:"Choose the correctly punctuated sentence:",options:{A:"Its a beautiful day, isnt it?",B:"It's a beautiful day, isn't it?",C:"Its a beautiful day, isn't it?",D:"It's a beautiful day, isnt it?"},correct:"B",explanation:"It's (it is) and isn't (is not) both need apostrophes."},
-    {id:10,question:"The passive voice of 'She is writing a letter' is:",options:{A:"A letter is written by her",B:"A letter is being written by her",C:"A letter was being written by her",D:"A letter has been written by her"},correct:"B",explanation:"Present continuous passive: is/am/are + being + V3."},
+    { title: "Grammar Rules — Error Spotting", points: [
+      "Subject-Verb Agreement: Singular subject → singular verb ('The list of items IS long')",
+      "'Each/Every/Either/Neither' take singular verbs",
+      "'A number of' → plural verb; 'The number of' → singular verb",
+      "Collective nouns (team, committee): usually singular ('The committee HAS decided')",
+      "Neither...nor / Either...or — verb agrees with nearest subject",
+      "Tense consistency: Don't mix past and present within same clause",
+      "Preposition rules: 'Senior/Junior/Prior/Prefer' take 'TO', not 'THAN'",
+      "'Discuss' takes direct object (no 'about'): 'discuss the matter' NOT 'discuss about'",
+      "'Comprise' = include (no 'of'): 'The team comprises 5 members'",
+      "Dangling modifiers: Modifier must refer to adjacent subject",
+    ]},
+    { title: "Vocabulary — High-Frequency Words", points: [
+      "Ebullient (enthusiastic) ↔ Morose (gloomy)",
+      "Prudent (wise, careful) ↔ Reckless (careless)",
+      "Benevolent (kind) ↔ Malevolent (wishing harm)",
+      "Exacerbate (worsen) ↔ Ameliorate (improve)",
+      "Ephemeral (short-lived) ↔ Perpetual (everlasting)",
+      "Cogent (convincing) ↔ Specious (misleadingly attractive)",
+      "Pragmatic (practical) ↔ Idealistic (impractical)",
+      "Acquiesce (accept reluctantly) ↔ Resist (oppose)",
+      "Ubiquitous (found everywhere) ↔ Rare (scarce)",
+      "Recalcitrant (stubbornly disobedient) ↔ Compliant (obedient)",
+      "Equivocal (ambiguous) ↔ Unequivocal (clear, unambiguous)",
+      "Abate (reduce) ↔ Intensify (increase)",
+    ]},
+    { title: "Idioms & Phrases", points: [
+      "Burn the midnight oil — work/study late into the night",
+      "A bone of contention — a subject of dispute",
+      "Beat around the bush — avoid the main topic",
+      "Bite the bullet — endure a painful situation bravely",
+      "Break the ice — initiate conversation in awkward setting",
+      "Cry wolf — raise false alarms",
+      "Hit the nail on the head — describe exactly what is right",
+      "In the same boat — in the same difficult situation",
+      "Spill the beans — reveal a secret",
+      "Turn a blind eye — ignore deliberately",
+      "Under the weather — feeling ill",
+      "A far cry from — very different from",
+    ]},
+    { title: "Reading Comprehension Strategy", points: [
+      "Read the questions FIRST to know what to look for",
+      "Skim the passage for main idea (first & last paragraphs)",
+      "Vocabulary-in-context: pick meaning that fits the passage, not dictionary definition",
+      "Inference questions: answer must be supported by passage, not your opinion",
+      "Tone/Attitude: look for adjectives and adverbs — critical, optimistic, neutral, etc.",
+      "Title questions: choose option that covers ENTIRE passage, not just one paragraph",
+      "Author's purpose: inform, persuade, critique, describe, narrate",
+      "RBI Grade B RC passages often come from: The Economist, RBI bulletins, IMF working papers",
+      "Practice tip: Read financial newspapers daily (Hindu Business Line, Mint, Economic Times)",
+    ]},
   ],
   reasoning: [
-    {id:1,question:"Statement: All dogs are cats. All cats are birds. Conclusion I: All dogs are birds. Conclusion II: All birds are dogs.",options:{A:"Only I follows",B:"Only II follows",C:"Both follow",D:"Neither follows"},correct:"A",explanation:"All dogs are cats, all cats are birds → All dogs are birds (I follows). But not all birds need be dogs (II doesn't follow)."},
-    {id:2,question:"If CLOUD is coded as DMPVE, then BRAIN is coded as:",options:{A:"CSBJO",B:"CQZHM",C:"DSBJO",D:"CSBKO"},correct:"A",explanation:"Each letter shifted by +1: B→C, R→S, A→B, I→J, N→O = CSBJO."},
-    {id:3,question:"Pointing to a man, a woman said 'His mother is the only daughter of my mother.' How is the woman related to the man?",options:{A:"Aunt",B:"Mother",C:"Sister",D:"Grandmother"},correct:"B",explanation:"Only daughter of my mother = myself. So 'his mother is me' — the woman is the man's mother."},
-    {id:4,question:"A man walks 5km South, turns left and walks 3km, turns left again and walks 5km. Which direction is he from the start?",options:{A:"East",B:"West",C:"North",D:"South"},correct:"A",explanation:"South 5km → left (East) 3km → left (North) 5km. He's 3km East of start."},
-    {id:5,question:"In a row of 40 students, M is 13th from the left and N is 18th from the right. How many students are between them?",options:{A:"9",B:"10",C:"11",D:"8"},correct:"B",explanation:"M is 13th from left, N is 18th from right (= 23rd from left). Students between = 23-13-1 = 9. Wait: 40-18+1=23. Between 13 and 23: 23-13-1 = 9."},
-    {id:6,question:"If P>Q, Q>R, R>S, which is definitely true?",options:{A:"Q>S",B:"S>P",C:"R>P",D:"S>Q"},correct:"A",explanation:"P>Q>R>S, so Q>S is definitely true."},
-    {id:7,question:"Find the missing number: 2, 6, 12, 20, 30, ?",options:{A:"40",B:"42",C:"44",D:"38"},correct:"B",explanation:"Differences: 4,6,8,10,12. Next = 30+12 = 42. (Pattern: n×(n+1): 1×2,2×3,3×4...)"},
-    {id:8,question:"How many triangles are in a figure made of a square with both diagonals drawn?",options:{A:"4",B:"6",C:"8",D:"10"},correct:"C",explanation:"A square with both diagonals creates 4 small triangles + 4 larger triangles = 8 triangles total."},
-    {id:9,question:"Which is the odd one out? Apple, Mango, Potato, Banana",options:{A:"Apple",B:"Mango",C:"Potato",D:"Banana"},correct:"C",explanation:"Potato is a vegetable/tuber; the rest are fruits."},
-    {id:10,question:"STATEMENT: Some pens are pencils. All pencils are erasers. CONCLUSION I: Some pens are erasers. II: Some erasers are pens.",options:{A:"Only I follows",B:"Only II follows",C:"Both follow",D:"Neither follows"},correct:"C",explanation:"Some pens are pencils + all pencils are erasers → Some pens are erasers (I). Converse of I → Some erasers are pens (II). Both follow."},
+    { title: "Syllogism — Rules & Shortcuts", points: [
+      "All A are B + All B are C → All A are C (valid)",
+      "All A are B + Some B are C → Some A are C (INVALID — common mistake!)",
+      "Some A are B → Some B are A (converse is valid)",
+      "No A are B → No B are A (converse valid)",
+      "Some A are not B → converse NOT valid",
+      "All A are B → Some A are B (valid implication)",
+      "Possibility cases: 'Some A are B is a possibility' — true unless explicitly denied",
+      "Complementary pairs: Either conclusion I or II follows (when they're complementary)",
+      "Use Venn diagrams for complex 3-4 statement syllogisms",
+      "Negative conclusions: 'No' and 'Some not' require careful checking",
+    ]},
+    { title: "Seating Arrangement — Approach", points: [
+      "Linear: Fix one person first (usually from definite clue), build from there",
+      "Circular: Fix one person, determine directions (facing center/outward)",
+      "Read ALL clues before starting, mark definite ones with ✓",
+      "Start with most definitive clues (exact position, immediate neighbors)",
+      "Use 'not' clues to eliminate possibilities",
+      "Double-variable: Track 2+ attributes (person-profession-position)",
+      "Rectangular: Note corner vs middle positions, facing directions",
+      "Common mistake: Confusing 'left' and 'right' in circular (from person's perspective vs observer)",
+      "Floor/Building arrangement: Bottom=1, track floor + attribute",
+      "Practice tip: Draw neat diagrams, label clearly, work systematically",
+    ]},
+    { title: "Coding-Decoding Patterns", points: [
+      "Letter shift: Each letter moved by fixed positions (A+2=C, B+2=D)",
+      "Reverse alphabet: A=Z, B=Y, C=X (position 27-n)",
+      "Position values: A=1, B=2... Z=26; operations on these numbers",
+      "Word reversal + shift: reverse word then shift letters",
+      "Vowel/consonant coding: different rules for vowels vs consonants",
+      "Number coding: letters replaced by numbers based on position/pattern",
+      "Conditional coding: different codes based on position in word",
+      "Sentence coding: Deduce word-to-code mapping from multiple sentences",
+      "New pattern: Mathematical operations on letter positions (×2, +3, etc.)",
+    ]},
+    { title: "Blood Relations & Directions", points: [
+      "Father's/Mother's father = Grandfather",
+      "Father's/Mother's brother = Uncle; sister = Aunt",
+      "Brother's/Sister's son = Nephew; daughter = Niece",
+      "Parent's sibling's child = Cousin (gender-neutral)",
+      "Key: Draw family tree downward (generation-wise), mark M/F",
+      "Coded blood relations: @=#=*=$ symbols for relationships",
+      "Direction basics: North↑ South↓ East→ West←",
+      "After turning: 'left' of North = West, 'right' of North = East",
+      "Shadow at sunrise: West (behind, facing East), Shadow at sunset: East",
+      "Pythagoras for diagonal distance: √(a² + b²)",
+    ]},
+    { title: "Inequality & Input-Output", points: [
+      "Coded inequality: @=>, #=<, $=≥, %=≤, &=≠ (varies by exam)",
+      "Transitive: A > B, B > C → A > C (valid)",
+      "A ≥ B, B > C → A > C (valid, takes stronger sign)",
+      "A > B, B ≤ C → no definite relation between A and C",
+      "Either/Or: When two conclusions are complementary, either must be true",
+      "Input-Output: Track step-by-step transformation pattern",
+      "Common I-O patterns: Sorting (ascending/descending), alternating arrangement",
+      "Look for: smallest/largest number moved, alphabetical word sorting",
+      "Each step makes ONE change — identify what changes position-wise",
+      "Find the rule from given steps, then apply to new input",
+    ]},
   ],
 };
 
-// ─── STYLES ───
-const styles = {
-  app: {
-    minHeight: "100vh",
-    background: "#0A0F1C",
-    color: "#E8ECF4",
-    fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
-    position: "relative",
-    overflow: "hidden",
-  },
-  grain: {
-    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-    background: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E")`,
-    pointerEvents: "none", zIndex: 0,
-  },
-  container: {
-    maxWidth: 900, margin: "0 auto", padding: "24px 16px", position: "relative", zIndex: 1,
-  },
-  header: {
-    textAlign: "center", marginBottom: 40, paddingTop: 20,
-  },
-  badge: {
-    display: "inline-block", padding: "6px 16px", borderRadius: 20,
-    background: "rgba(14,124,107,0.15)", border: "1px solid rgba(14,124,107,0.3)",
-    color: "#4FD1B5", fontSize: 12, fontWeight: 600, letterSpacing: 1.5,
-    textTransform: "uppercase", marginBottom: 12,
-  },
-  title: {
-    fontSize: 32, fontWeight: 800, margin: "8px 0",
-    background: "linear-gradient(135deg, #FFFFFF 0%, #94A3B8 100%)",
-    WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-    letterSpacing: -0.5,
-  },
-  subtitle: { fontSize: 14, color: "#64748B", marginTop: 4 },
-  // Cards
-  card: {
-    background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
-    borderRadius: 16, padding: 24, marginBottom: 16,
-    backdropFilter: "blur(10px)",
-  },
-  cardTitle: { fontSize: 16, fontWeight: 700, marginBottom: 16, color: "#CBD5E1" },
-  // Subject grid
-  subjectGrid: {
-    display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 12,
-  },
-  subjectBtn: (selected, color) => ({
-    padding: "16px 20px", borderRadius: 12, border: `1.5px solid ${selected ? color : 'rgba(255,255,255,0.08)'}`,
-    background: selected ? `${color}15` : "rgba(255,255,255,0.02)",
-    cursor: "pointer", textAlign: "left", transition: "all 0.2s",
-    transform: selected ? "scale(1.02)" : "scale(1)",
-  }),
-  subjectLabel: { fontSize: 14, fontWeight: 600, color: "#E2E8F0" },
-  subjectSub: { fontSize: 12, color: "#64748B", marginTop: 2 },
-  // Count selector
-  countRow: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 },
-  countBtn: (sel) => ({
-    padding: "8px 20px", borderRadius: 8,
-    background: sel ? "#0E7C6B" : "rgba(255,255,255,0.05)",
-    border: sel ? "1px solid #0E7C6B" : "1px solid rgba(255,255,255,0.08)",
-    color: sel ? "#FFF" : "#94A3B8", fontWeight: 600, cursor: "pointer",
-    fontSize: 14, transition: "all 0.2s",
-  }),
-  // Start button
-  startBtn: (dis) => ({
-    width: "100%", padding: "16px", borderRadius: 12,
-    background: dis ? "rgba(255,255,255,0.05)" : "linear-gradient(135deg, #0E7C6B 0%, #0A5C50 100%)",
-    border: "none", color: dis ? "#475569" : "#FFF",
-    fontSize: 16, fontWeight: 700, cursor: dis ? "not-allowed" : "pointer",
-    transition: "all 0.3s", letterSpacing: 0.5, marginTop: 16,
-  }),
-  // Quiz
-  timerBar: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 },
-  timer: (warn) => ({
-    fontSize: 28, fontWeight: 800, fontFamily: "'JetBrains Mono', monospace",
-    color: warn ? "#EF4444" : "#4FD1B5",
-    textShadow: warn ? "0 0 20px rgba(239,68,68,0.4)" : "none",
-  }),
-  progressOuter: {
-    height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3,
-    marginBottom: 24, overflow: "hidden",
-  },
-  progressInner: (pct, color) => ({
-    height: "100%", width: `${pct}%`, background: color || "#0E7C6B",
-    borderRadius: 3, transition: "width 0.3s",
-  }),
-  qNumber: { fontSize: 12, color: "#64748B", fontWeight: 600, letterSpacing: 1, marginBottom: 8 },
-  qText: { fontSize: 18, fontWeight: 600, color: "#F1F5F9", lineHeight: 1.5, marginBottom: 24 },
-  optionBtn: (state) => {
-    const base = {
-      width: "100%", padding: "16px 20px", borderRadius: 12, textAlign: "left",
-      cursor: state === "disabled" ? "default" : "pointer", fontSize: 15,
-      fontWeight: 500, transition: "all 0.2s", display: "flex", alignItems: "center", gap: 12,
-      marginBottom: 8,
-    };
-    if (state === "correct") return { ...base, background: "rgba(16,185,129,0.12)", border: "1.5px solid #10B981", color: "#A7F3D0" };
-    if (state === "wrong") return { ...base, background: "rgba(239,68,68,0.12)", border: "1.5px solid #EF4444", color: "#FCA5A5" };
-    if (state === "selected") return { ...base, background: "rgba(14,124,107,0.15)", border: "1.5px solid #0E7C6B", color: "#E2E8F0" };
-    return { ...base, background: "rgba(255,255,255,0.03)", border: "1.5px solid rgba(255,255,255,0.08)", color: "#CBD5E1" };
-  },
-  optionKey: (state) => ({
-    width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center",
-    justifyContent: "center", fontWeight: 700, fontSize: 13, flexShrink: 0,
-    background: state === "correct" ? "#10B981" : state === "wrong" ? "#EF4444" : "rgba(255,255,255,0.06)",
-    color: (state === "correct" || state === "wrong") ? "#FFF" : "#94A3B8",
-  }),
-  explanation: {
-    marginTop: 12, padding: 16, borderRadius: 12,
-    background: "rgba(14,124,107,0.08)", border: "1px solid rgba(14,124,107,0.2)",
-    fontSize: 13, color: "#94A3B8", lineHeight: 1.6,
-  },
-  navRow: { display: "flex", gap: 12, marginTop: 24 },
-  navBtn: (primary) => ({
-    flex: 1, padding: "14px", borderRadius: 12, border: "none",
-    background: primary ? "#0E7C6B" : "rgba(255,255,255,0.06)",
-    color: primary ? "#FFF" : "#94A3B8", fontWeight: 600, cursor: "pointer",
-    fontSize: 14, transition: "all 0.2s",
-  }),
-  // Results
-  scoreCircle: (pct) => ({
-    width: 160, height: 160, borderRadius: "50%", margin: "0 auto 24px",
-    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-    background: `conic-gradient(${pct >= 70 ? '#10B981' : pct >= 40 ? '#F59E0B' : '#EF4444'} ${pct * 3.6}deg, rgba(255,255,255,0.05) 0deg)`,
-    position: "relative",
-  }),
-  scoreInner: {
-    width: 130, height: 130, borderRadius: "50%", background: "#0A0F1C",
-    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-  },
-  scorePct: { fontSize: 36, fontWeight: 800, color: "#FFF" },
-  scoreLabel: { fontSize: 11, color: "#64748B", marginTop: 2 },
-  statGrid: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 24 },
-  statBox: (color) => ({
-    padding: 16, borderRadius: 12, background: `${color}10`,
-    border: `1px solid ${color}30`, textAlign: "center",
-  }),
-  statNum: (color) => ({ fontSize: 24, fontWeight: 800, color }),
-  statLabel: { fontSize: 11, color: "#64748B", marginTop: 4 },
-  // Tabs
-  tabRow: { display: "flex", gap: 4, marginBottom: 20, background: "rgba(255,255,255,0.03)", borderRadius: 12, padding: 4 },
-  tab: (active) => ({
-    flex: 1, padding: "10px 16px", borderRadius: 10, border: "none",
-    background: active ? "rgba(14,124,107,0.2)" : "transparent",
-    color: active ? "#4FD1B5" : "#64748B",
-    fontWeight: 600, cursor: "pointer", fontSize: 13, transition: "all 0.2s",
-  }),
-  // Revision
-  revCard: {
-    background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)",
-    borderRadius: 12, marginBottom: 12, overflow: "hidden",
-  },
-  revHeader: (open) => ({
-    padding: "14px 20px", cursor: "pointer", display: "flex",
-    justifyContent: "space-between", alignItems: "center",
-    background: open ? "rgba(14,124,107,0.06)" : "transparent",
-    transition: "background 0.2s",
-  }),
-  revTitle: { fontSize: 14, fontWeight: 700, color: "#E2E8F0" },
-  revBody: { padding: "0 20px 16px", fontSize: 13, color: "#94A3B8", lineHeight: 1.8 },
-  revBullet: {
-    padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.04)",
-    display: "flex", alignItems: "flex-start", gap: 8,
-  },
-  dot: (color) => ({
-    width: 6, height: 6, borderRadius: "50%", background: color || "#0E7C6B",
-    marginTop: 7, flexShrink: 0,
-  }),
-};
+// ═══════════════════════════════════════════════════════════
+// STORAGE HELPERS
+// ═══════════════════════════════════════════════════════════
+const LS_WRONG = "rbi_wrong_answers";
+const LS_USED = "rbi_used_questions";
+const LS_THEME = "rbi_theme";
+const LS_STATS = "rbi_test_stats";
 
-// ─── SCREENS ───
-const SCREEN = { HOME: 0, QUIZ: 1, RESULT: 2, REVISION: 3 };
+function loadWrongAnswers() { try { return JSON.parse(localStorage.getItem(LS_WRONG) || "[]"); } catch { return []; } }
+function saveWrongAnswers(data) { try { localStorage.setItem(LS_WRONG, JSON.stringify(data)); } catch {} }
+function loadUsedQuestions() { try { return JSON.parse(localStorage.getItem(LS_USED) || "{}"); } catch { return {}; } }
+function saveUsedQuestions(data) { try { localStorage.setItem(LS_USED, JSON.stringify(data)); } catch {} }
+function loadTheme() { try { return localStorage.getItem(LS_THEME) || "dark"; } catch { return "dark"; } }
+function saveTheme(t) { try { localStorage.setItem(LS_THEME, t); } catch {} }
+function loadStats() { try { return JSON.parse(localStorage.getItem(LS_STATS) || "[]"); } catch { return []; } }
+function saveStats(data) { try { localStorage.setItem(LS_STATS, JSON.stringify(data.slice(-50))); } catch {} }
 
-export default function RBIGradeBDashboard() {
+// ═══════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════
+const SCREEN = { HOME: 0, QUIZ: 1, RESULT: 2, REVISION: 3, WRONG: 4 };
+
+export default function App() {
+  const [theme, setTheme] = useState(loadTheme);
   const [screen, setScreen] = useState(SCREEN.HOME);
   const [subject, setSubject] = useState(null);
   const [qCount, setQCount] = useState(10);
   const [questions, setQuestions] = useState([]);
   const [currentQ, setCurrentQ] = useState(0);
   const [answers, setAnswers] = useState({});
-  const [showExplanation, setShowExplanation] = useState(false);
+  const [showExp, setShowExp] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [wrongAnswers, setWrongAnswers] = useState(loadWrongAnswers);
+  const [usedQuestions, setUsedQuestions] = useState(loadUsedQuestions);
   const [resultTab, setResultTab] = useState("summary");
   const [openNotes, setOpenNotes] = useState({});
   const [revSubject, setRevSubject] = useState("esi");
+  const [wrongFilter, setWrongFilter] = useState("all");
   const timerRef = useRef(null);
+
+  const T = THEMES[theme];
+  const toggleTheme = () => { const n = theme === "dark" ? "light" : "dark"; setTheme(n); saveTheme(n); };
 
   // Timer
   useEffect(() => {
     if (screen === SCREEN.QUIZ && timeLeft > 0) {
       timerRef.current = setInterval(() => {
-        setTimeLeft((t) => {
-          if (t <= 1) {
-            clearInterval(timerRef.current);
-            setScreen(SCREEN.RESULT);
-            return 0;
-          }
-          return t - 1;
-        });
+        setTimeLeft(t => { if (t <= 1) { clearInterval(timerRef.current); setScreen(SCREEN.RESULT); return 0; } return t - 1; });
       }, 1000);
       return () => clearInterval(timerRef.current);
     }
   }, [screen, timeLeft]);
 
-  const formatTime = (s) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
+  const fmt = s => `${Math.floor(s/60).toString().padStart(2,"0")}:${(s%60).toString().padStart(2,"0")}`;
+
+  const startQuiz = (qs) => {
+    setQuestions(qs);
+    setTimeLeft(qs.length * 60);
+    setCurrentQ(0);
+    setAnswers({});
+    setShowExp(false);
+    setScreen(SCREEN.QUIZ);
   };
 
   const fetchQuestions = async () => {
     setLoading(true);
-    setError(null);
+    const subjectUsed = usedQuestions[subject] || [];
+    const usedText = subjectUsed.length > 0 ? subjectUsed.slice(-30).join("\n") : "";
+
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 4000,
-          messages: [{ role: "user", content: buildSystemPrompt(subject, qCount) }],
+          tools: [{ type: "web_search_20250305", name: "web_search" }],
+          messages: [{ role: "user", content: buildPrompt(subject, qCount, usedText) }],
         }),
       });
       const data = await res.json();
-      const text = data.content?.map((i) => i.text || "").join("") || "";
-      const clean = text.replace(/```json|```/g, "").trim();
-      const parsed = JSON.parse(clean);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        setQuestions(parsed.slice(0, qCount));
-        setTimeLeft(qCount * 60); // 1 min per question
-        setCurrentQ(0);
-        setAnswers({});
-        setShowExplanation(false);
-        setScreen(SCREEN.QUIZ);
-      } else throw new Error("Invalid response");
-    } catch (e) {
-      // Use fallback questions
-      const fallback = FALLBACK_QUESTIONS[subject] || FALLBACK_QUESTIONS.esi;
-      const shuffled = [...fallback].sort(() => Math.random() - 0.5).slice(0, Math.min(qCount, fallback.length));
-      shuffled.forEach((q, i) => q.id = i + 1);
-      setQuestions(shuffled);
-      setTimeLeft(shuffled.length * 60);
-      setCurrentQ(0);
-      setAnswers({});
-      setShowExplanation(false);
-      setScreen(SCREEN.QUIZ);
+      const text = data.content?.map(i => i.text || "").filter(Boolean).join("") || "";
+      // Try to extract JSON from response
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const qs = parsed.slice(0, qCount).map((q,i) => ({ ...q, id: i+1 }));
+          // Track used questions
+          const newUsed = [...subjectUsed, ...qs.map(q => q.question)];
+          const updated = { ...usedQuestions, [subject]: newUsed.slice(-60) };
+          saveUsedQuestions(updated);
+          startQuiz(qs);
+          setLoading(false);
+          return;
+        }
+      }
+      throw new Error("Parse failed");
+    } catch {
+      // Fallback with shuffling and anti-repeat
+      useFallback();
     }
     setLoading(false);
   };
 
-  const handleAnswer = (qId, option) => {
+  const useFallback = () => {
+    const bank = FALLBACK_BANK[subject] || FALLBACK_BANK.esi;
+    const used = usedQuestions[subject] || [];
+    // Prefer unused questions
+    const unused = bank.filter(q => !used.includes(q.question));
+    const pool = unused.length >= qCount ? unused : [...unused, ...bank.filter(q => used.includes(q.question))];
+    const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, Math.min(qCount, pool.length));
+    shuffled.forEach((q, i) => q.id = i + 1);
+    // Track
+    const newUsed = [...used, ...shuffled.map(q => q.question)];
+    const updated = { ...usedQuestions, [subject]: newUsed.slice(-60) };
+    setUsedQuestions(updated);
+    saveUsedQuestions(updated);
+    startQuiz(shuffled);
+  };
+
+  const handleAnswer = (qId, opt) => {
     if (answers[qId]) return;
-    setAnswers((prev) => ({ ...prev, [qId]: option }));
-    setShowExplanation(true);
+    setAnswers(p => ({ ...p, [qId]: opt }));
+    setShowExp(true);
   };
 
-  const nextQuestion = () => {
-    setShowExplanation(false);
-    if (currentQ < questions.length - 1) {
-      setCurrentQ((c) => c + 1);
-    } else {
-      clearInterval(timerRef.current);
-      setScreen(SCREEN.RESULT);
-    }
+  const nextQ = () => {
+    setShowExp(false);
+    if (currentQ < questions.length - 1) setCurrentQ(c => c + 1);
+    else { clearInterval(timerRef.current); finishTest(); }
   };
 
-  const prevQuestion = () => {
-    if (currentQ > 0) {
-      setShowExplanation(!!answers[questions[currentQ - 1]?.id]);
-      setCurrentQ((c) => c - 1);
+  const prevQ = () => {
+    if (currentQ > 0) { setShowExp(!!answers[questions[currentQ-1]?.id]); setCurrentQ(c => c - 1); }
+  };
+
+  const finishTest = () => {
+    // Save wrong answers
+    const newWrong = [];
+    questions.forEach(q => {
+      if (answers[q.id] && answers[q.id] !== q.correct) {
+        newWrong.push({
+          question: q.question, options: q.options, correct: q.correct,
+          userAnswer: answers[q.id], explanation: q.explanation,
+          topic: q.topic || "General", subject,
+          date: new Date().toISOString().split("T")[0],
+        });
+      }
+    });
+    if (newWrong.length > 0) {
+      const updated = [...wrongAnswers, ...newWrong].slice(-200); // keep last 200
+      setWrongAnswers(updated);
+      saveWrongAnswers(updated);
     }
+    // Save test stats
+    const score = getScore();
+    const stats = loadStats();
+    stats.push({ subject, date: new Date().toISOString(), ...score });
+    saveStats(stats);
+    setScreen(SCREEN.RESULT);
   };
 
   const getScore = () => {
-    let correct = 0, wrong = 0, skipped = 0;
-    questions.forEach((q) => {
+    let correct=0, wrong=0, skipped=0;
+    questions.forEach(q => {
       if (!answers[q.id]) skipped++;
-      else if (answers[q.id] === q.correct) correct++;
+      else if (answers[q.id]===q.correct) correct++;
       else wrong++;
     });
-    return { correct, wrong, skipped, total: questions.length, pct: Math.round((correct / questions.length) * 100) };
+    return { correct, wrong, skipped, total: questions.length, pct: Math.round((correct/questions.length)*100) };
   };
 
-  const getOptionState = (q, key) => {
-    if (!answers[q.id]) return "default";
-    if (key === q.correct) return "correct";
-    if (answers[q.id] === key && key !== q.correct) return "wrong";
-    return "disabled";
+  const getOptState = (q, key) => {
+    if (!answers[q.id]) return "def";
+    if (key===q.correct) return "correct";
+    if (answers[q.id]===key && key!==q.correct) return "wrong";
+    return "dis";
   };
 
-  const subjectColor = SUBJECTS.find((s) => s.id === subject)?.color || "#0E7C6B";
+  const subColor = SUBJECTS.find(s=>s.id===subject)?.color || T.accent;
 
-  // ─── HOME SCREEN ───
+  // ─── STYLES ───
+  const s = {
+    app: { minHeight:"100vh", background:T.bg, color:T.text, fontFamily:"'DM Sans',sans-serif", position:"relative" },
+    container: { maxWidth:920, margin:"0 auto", padding:"20px 16px" },
+    header: { display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:32, paddingTop:12 },
+    headerLeft: { },
+    badge: { display:"inline-block", padding:"5px 14px", borderRadius:16, background:T.accentGlow, border:`1px solid ${T.accent}40`, color:T.accent, fontSize:11, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", marginBottom:8 },
+    title: { fontSize:28, fontWeight:800, color:T.text, letterSpacing:-0.5 },
+    subtitle: { fontSize:13, color:T.textMuted, marginTop:2 },
+    themeBtn: { background:T.bgCard, border:`1px solid ${T.border}`, borderRadius:12, padding:"10px 14px", cursor:"pointer", fontSize:18, color:T.text },
+    // Nav
+    nav: { display:"flex", gap:6, marginBottom:24, flexWrap:"wrap" },
+    navBtn: (active) => ({ padding:"10px 20px", borderRadius:10, border:`1px solid ${active?T.accent:T.border}`, background:active?T.accentGlow:"transparent", color:active?T.accent:T.textMuted, fontWeight:600, cursor:"pointer", fontSize:13 }),
+    // Card
+    card: { background:T.bgCard, border:`1px solid ${T.border}`, borderRadius:16, padding:24, marginBottom:16 },
+    cardTitle: { fontSize:15, fontWeight:700, marginBottom:16, color:T.textSecondary, textTransform:"uppercase", letterSpacing:0.8, fontSize:12 },
+    // Subject grid
+    sGrid: { display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))", gap:10 },
+    sBtn: (sel,col) => ({ padding:"14px 18px", borderRadius:12, border:`1.5px solid ${sel?col:T.border}`, background:sel?`${col}12`:T.bgCard, cursor:"pointer", textAlign:"left", transition:"all 0.15s" }),
+    sLabel: { fontSize:14, fontWeight:700, color:T.text },
+    sDesc: { fontSize:11, color:T.textMuted, marginTop:3 },
+    // Count
+    cRow: { display:"flex", gap:8, flexWrap:"wrap", marginTop:6 },
+    cBtn: (sel) => ({ padding:"8px 20px", borderRadius:8, background:sel?T.accent:T.bgCard, border:`1px solid ${sel?T.accent:T.border}`, color:sel?"#FFF":T.textMuted, fontWeight:700, cursor:"pointer", fontSize:14 }),
+    // Start
+    startBtn: (dis) => ({ width:"100%", padding:"16px", borderRadius:12, background:dis?T.bgCard:`linear-gradient(135deg,${T.accent},${T.accent}CC)`, border:"none", color:dis?T.textMuted:"#FFF", fontSize:16, fontWeight:700, cursor:dis?"not-allowed":"pointer", marginTop:16, letterSpacing:0.5 }),
+    // Quiz
+    timerBar: { display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 },
+    timer: (warn) => ({ fontSize:26, fontWeight:800, fontFamily:"'JetBrains Mono',monospace", color:warn?T.wrong:T.accent }),
+    progOuter: { height:5, background:T.bgCard, borderRadius:3, marginBottom:20, overflow:"hidden" },
+    progInner: (pct,col) => ({ height:"100%", width:`${pct}%`, background:col||T.accent, borderRadius:3, transition:"width 0.3s" }),
+    qNum: { fontSize:11, color:T.textMuted, fontWeight:700, letterSpacing:1, marginBottom:6 },
+    qText: { fontSize:17, fontWeight:600, color:T.text, lineHeight:1.55, marginBottom:20 },
+    optBtn: (st) => {
+      const base = { width:"100%", padding:"14px 18px", borderRadius:12, textAlign:"left", cursor:st==="dis"?"default":"pointer", fontSize:14, fontWeight:500, display:"flex", alignItems:"center", gap:12, marginBottom:7, transition:"all 0.15s" };
+      if (st==="correct") return { ...base, background:`${T.correct}15`, border:`1.5px solid ${T.correct}`, color:T.correct };
+      if (st==="wrong") return { ...base, background:`${T.wrong}15`, border:`1.5px solid ${T.wrong}`, color:T.wrong };
+      if (st==="sel") return { ...base, background:T.accentGlow, border:`1.5px solid ${T.accent}`, color:T.text };
+      return { ...base, background:T.bgCard, border:`1.5px solid ${T.border}`, color:T.textSecondary };
+    },
+    optKey: (st) => ({ width:30, height:30, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:12, flexShrink:0,
+      background:st==="correct"?T.correct:st==="wrong"?T.wrong:T.bgCardHover, color:(st==="correct"||st==="wrong")?"#FFF":T.textMuted }),
+    expBox: { marginTop:10, padding:14, borderRadius:12, background:`${T.accent}10`, border:`1px solid ${T.accent}30`, fontSize:13, color:T.textSecondary, lineHeight:1.6 },
+    navRow: { display:"flex", gap:10, marginTop:20 },
+    btnPri: { flex:1, padding:"13px", borderRadius:12, border:"none", background:T.accent, color:"#FFF", fontWeight:600, cursor:"pointer", fontSize:14 },
+    btnSec: { flex:1, padding:"13px", borderRadius:12, border:`1px solid ${T.border}`, background:"transparent", color:T.textSecondary, fontWeight:600, cursor:"pointer", fontSize:14 },
+    // Score
+    scoreRing: (pct) => ({ width:150, height:150, borderRadius:"50%", margin:"0 auto 20px", display:"flex", alignItems:"center", justifyContent:"center",
+      background:`conic-gradient(${pct>=70?T.correct:pct>=40?T.skip:T.wrong} ${pct*3.6}deg, ${T.bgCard} 0deg)` }),
+    scoreInner: { width:122, height:122, borderRadius:"50%", background:T.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center" },
+    scorePct: { fontSize:34, fontWeight:800, color:T.text },
+    scoreLabel: { fontSize:10, color:T.textMuted, marginTop:2 },
+    statGrid: { display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:10, marginBottom:20 },
+    statBox: (c) => ({ padding:14, borderRadius:12, background:`${c}10`, border:`1px solid ${c}25`, textAlign:"center" }),
+    statNum: (c) => ({ fontSize:22, fontWeight:800, color:c }),
+    statLbl: { fontSize:10, color:T.textMuted, marginTop:3 },
+    // Tabs
+    tabRow: { display:"flex", gap:3, marginBottom:16, background:T.bgCard, borderRadius:10, padding:3 },
+    tab: (a) => ({ flex:1, padding:"9px 14px", borderRadius:8, border:"none", background:a?T.accentGlow:"transparent", color:a?T.accent:T.textMuted, fontWeight:600, cursor:"pointer", fontSize:12 }),
+    // Revision
+    revCard: { background:T.bgCard, border:`1px solid ${T.border}`, borderRadius:12, marginBottom:10, overflow:"hidden" },
+    revHdr: (o) => ({ padding:"13px 18px", cursor:"pointer", display:"flex", justifyContent:"space-between", alignItems:"center", background:o?T.accentGlow:"transparent" }),
+    revTitle: { fontSize:14, fontWeight:700, color:T.text },
+    revBody: { padding:"0 18px 14px" },
+    revPt: { padding:"5px 0", borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"flex-start", gap:8, fontSize:13, color:T.textSecondary, lineHeight:1.7 },
+    dot: (c) => ({ width:5, height:5, borderRadius:"50%", background:c||T.accent, marginTop:8, flexShrink:0 }),
+    // Wrong answers
+    wrongCard: (col) => ({ ...this?.card, background:T.bgCard, border:`1px solid ${T.border}`, borderLeft:`3px solid ${col||T.wrong}`, borderRadius:12, padding:18, marginBottom:12 }),
+    // Question dots
+    qDot: (i, isActive, isCorrect, isWrong, isAnswered) => ({
+      width:30, height:30, borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:700, cursor:"pointer",
+      background: isActive ? subColor : isCorrect ? `${T.correct}20` : isWrong ? `${T.wrong}20` : isAnswered ? T.accentGlow : T.bgCard,
+      border: isActive ? `2px solid ${subColor}` : `1px solid ${T.border}`,
+      color: isActive ? "#FFF" : T.textMuted,
+    }),
+  };
+
+  // ─── SCREENS ───
+  
+  // HOME
   if (screen === SCREEN.HOME) {
     return (
-      <div style={styles.app}>
-        <div style={styles.grain} />
-        <div style={styles.container}>
-          <div style={styles.header}>
-            <div style={styles.badge}>Practice Mode</div>
-            <h1 style={styles.title}>RBI Grade B</h1>
-            <p style={styles.subtitle}>Exam Practice Dashboard — 30 Day Prep</p>
+      <div style={s.app}>
+        <div style={s.container}>
+          <div style={s.header}>
+            <div style={s.headerLeft}>
+              <div style={s.badge}>Practice Dashboard</div>
+              <h1 style={s.title}>RBI Grade B</h1>
+              <p style={s.subtitle}>Phase 1 & 2 — Exam Practice</p>
+            </div>
+            <button style={s.themeBtn} onClick={toggleTheme} title="Toggle theme">{theme==="dark"?"☀️":"🌙"}</button>
           </div>
 
-          {/* Navigation */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-            <button style={{ ...styles.navBtn(true), flex: "none", padding: "10px 24px" }} onClick={() => setScreen(SCREEN.HOME)}>
-              📝 Practice
-            </button>
-            <button style={{ ...styles.navBtn(false), flex: "none", padding: "10px 24px" }} onClick={() => setScreen(SCREEN.REVISION)}>
-              📚 Revision Notes
+          <div style={s.nav}>
+            <button style={s.navBtn(true)}>📝 Practice</button>
+            <button style={s.navBtn(false)} onClick={()=>setScreen(SCREEN.REVISION)}>📚 Revision Notes</button>
+            <button style={s.navBtn(false)} onClick={()=>setScreen(SCREEN.WRONG)}>
+              ❌ Wrong Answers {wrongAnswers.length > 0 && `(${wrongAnswers.length})`}
             </button>
           </div>
 
-          {/* Subject Selection */}
-          <div style={styles.card}>
-            <div style={styles.cardTitle}>Choose Subject</div>
-            <div style={styles.subjectGrid}>
-              {SUBJECTS.map((s) => (
-                <div key={s.id} style={styles.subjectBtn(subject === s.id, s.color)} onClick={() => setSubject(s.id)}>
-                  <div style={styles.subjectLabel}>{s.icon} {s.label}</div>
-                  <div style={styles.subjectSub}>{(FALLBACK_QUESTIONS[s.id]?.length || 10)}+ questions available</div>
+          <div style={s.card}>
+            <div style={s.cardTitle}>Choose Subject</div>
+            <div style={s.sGrid}>
+              {SUBJECTS.map(sub=>(
+                <div key={sub.id} style={s.sBtn(subject===sub.id,sub.color)} onClick={()=>setSubject(sub.id)}>
+                  <div style={s.sLabel}>{sub.icon} {sub.label}</div>
+                  <div style={s.sDesc}>{sub.desc}</div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Question Count */}
-          <div style={styles.card}>
-            <div style={styles.cardTitle}>Number of Questions</div>
-            <div style={styles.countRow}>
-              {QUESTION_COUNTS.map((n) => (
-                <button key={n} style={styles.countBtn(qCount === n)} onClick={() => setQCount(n)}>
-                  {n}
-                </button>
+          <div style={s.card}>
+            <div style={s.cardTitle}>Number of Questions</div>
+            <div style={s.cRow}>
+              {QCOUNTS.map(n=>(
+                <button key={n} style={s.cBtn(qCount===n)} onClick={()=>setQCount(n)}>{n}</button>
               ))}
             </div>
-            <p style={{ fontSize: 12, color: "#64748B", marginTop: 12 }}>
-              ⏱ Time: {qCount} minutes ({qCount} questions × 1 min each)
-            </p>
+            <p style={{fontSize:12,color:T.textMuted,marginTop:10}}>⏱ {qCount} minutes • 1 min/question • -0.25 negative marking</p>
           </div>
 
-          {/* Start */}
-          <button
-            style={styles.startBtn(!subject || loading)}
-            disabled={!subject || loading}
-            onClick={fetchQuestions}
-          >
-            {loading ? "⏳ Generating Fresh Questions..." : "🚀 Start Practice Test"}
+          <button style={s.startBtn(!subject||loading)} disabled={!subject||loading} onClick={fetchQuestions}>
+            {loading ? "⏳ Generating Questions..." : "🚀 Start Practice Test"}
           </button>
-          {error && <p style={{ color: "#F59E0B", fontSize: 13, marginTop: 8, textAlign: "center" }}>{error}</p>}
         </div>
       </div>
     );
   }
 
-  // ─── QUIZ SCREEN ───
+  // QUIZ
   if (screen === SCREEN.QUIZ && questions.length > 0) {
     const q = questions[currentQ];
-    const progress = ((currentQ + 1) / questions.length) * 100;
+    const progress = ((currentQ+1)/questions.length)*100;
     const answered = Object.keys(answers).length;
-    const isWarn = timeLeft < 60;
 
     return (
-      <div style={styles.app}>
-        <div style={styles.grain} />
-        <div style={styles.container}>
-          {/* Timer Bar */}
-          <div style={styles.timerBar}>
-            <div>
-              <span style={{ fontSize: 12, color: "#64748B" }}>
-                {SUBJECTS.find((s) => s.id === subject)?.icon} {SUBJECTS.find((s) => s.id === subject)?.label}
-              </span>
-            </div>
-            <div style={styles.timer(isWarn)}>{formatTime(timeLeft)}</div>
-            <div style={{ fontSize: 12, color: "#64748B" }}>
-              {answered}/{questions.length} answered
-            </div>
+      <div style={s.app}>
+        <div style={s.container}>
+          <div style={s.timerBar}>
+            <span style={{fontSize:12,color:T.textMuted}}>{SUBJECTS.find(x=>x.id===subject)?.icon} {SUBJECTS.find(x=>x.id===subject)?.label}</span>
+            <div style={s.timer(timeLeft<60)}>{fmt(timeLeft)}</div>
+            <span style={{fontSize:12,color:T.textMuted}}>{answered}/{questions.length} done</span>
           </div>
+          <div style={s.progOuter}><div style={s.progInner(progress,subColor)}/></div>
 
-          {/* Progress */}
-          <div style={styles.progressOuter}>
-            <div style={styles.progressInner(progress, subjectColor)} />
-          </div>
-
-          {/* Question Card */}
-          <div style={styles.card}>
-            <div style={styles.qNumber}>QUESTION {currentQ + 1} OF {questions.length}</div>
-            <div style={styles.qText}>{q.question}</div>
-
-            {/* Options */}
-            {["A", "B", "C", "D"].map((key) => {
-              const state = showExplanation ? getOptionState(q, key) : (answers[q.id] === key ? "selected" : "default");
+          <div style={s.card}>
+            <div style={s.qNum}>QUESTION {currentQ+1} OF {questions.length} {q.topic && `• ${q.topic}`}</div>
+            <div style={s.qText}>{q.question}</div>
+            {["A","B","C","D"].map(k => {
+              const st = showExp ? getOptState(q,k) : (answers[q.id]===k?"sel":"def");
               return (
-                <div
-                  key={key}
-                  style={styles.optionBtn(state)}
-                  onClick={() => handleAnswer(q.id, key)}
-                >
-                  <div style={styles.optionKey(state)}>{key}</div>
-                  <div>{q.options[key]}</div>
+                <div key={k} style={s.optBtn(st)} onClick={()=>handleAnswer(q.id,k)}>
+                  <div style={s.optKey(st)}>{k}</div>
+                  <div style={{flex:1}}>{q.options[k]}</div>
                 </div>
               );
             })}
-
-            {/* Explanation */}
-            {showExplanation && answers[q.id] && (
-              <div style={styles.explanation}>
-                <strong style={{ color: "#4FD1B5" }}>
-                  {answers[q.id] === q.correct ? "✅ Correct!" : `❌ Wrong — Correct: ${q.correct}`}
-                </strong>
-                <br />
-                {q.explanation}
+            {showExp && answers[q.id] && (
+              <div style={s.expBox}>
+                <strong style={{color:answers[q.id]===q.correct?T.correct:T.wrong}}>
+                  {answers[q.id]===q.correct ? "✅ Correct!" : `❌ Wrong — Correct: ${q.correct}`}
+                </strong><br/>{q.explanation}
               </div>
             )}
           </div>
 
-          {/* Navigation */}
-          <div style={styles.navRow}>
-            <button style={styles.navBtn(false)} onClick={prevQuestion} disabled={currentQ === 0}>
-              ← Previous
-            </button>
+          <div style={s.navRow}>
+            <button style={s.btnSec} onClick={prevQ} disabled={currentQ===0}>← Prev</button>
             {answers[q.id] ? (
-              <button style={styles.navBtn(true)} onClick={nextQuestion}>
-                {currentQ === questions.length - 1 ? "Finish Test →" : "Next →"}
-              </button>
+              <button style={s.btnPri} onClick={nextQ}>{currentQ===questions.length-1?"Finish →":"Next →"}</button>
             ) : (
-              <button style={{ ...styles.navBtn(false), color: "#F59E0B" }} onClick={nextQuestion}>
-                Skip →
-              </button>
+              <button style={{...s.btnSec,color:T.skip}} onClick={nextQ}>Skip →</button>
             )}
           </div>
 
-          {/* Question dots */}
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 16, justifyContent: "center" }}>
-            {questions.map((qq, i) => (
-              <div
-                key={i}
-                onClick={() => { setCurrentQ(i); setShowExplanation(!!answers[qq.id]); }}
-                style={{
-                  width: 32, height: 32, borderRadius: 8, display: "flex",
-                  alignItems: "center", justifyContent: "center", fontSize: 11,
-                  fontWeight: 700, cursor: "pointer",
-                  background: i === currentQ ? subjectColor :
-                    answers[qq.id] === qq.correct ? "rgba(16,185,129,0.2)" :
-                    answers[qq.id] ? "rgba(239,68,68,0.2)" : "rgba(255,255,255,0.05)",
-                  border: i === currentQ ? `2px solid ${subjectColor}` : "1px solid rgba(255,255,255,0.08)",
-                  color: i === currentQ ? "#FFF" : "#64748B",
-                }}
-              >
-                {i + 1}
-              </div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:14,justifyContent:"center"}}>
+            {questions.map((qq,i)=>(
+              <div key={i}
+                onClick={()=>{setCurrentQ(i);setShowExp(!!answers[qq.id]);}}
+                style={s.qDot(i,i===currentQ,answers[qq.id]===qq.correct,answers[qq.id]&&answers[qq.id]!==qq.correct,!!answers[qq.id])}
+              >{i+1}</div>
             ))}
           </div>
         </div>
@@ -596,157 +939,129 @@ export default function RBIGradeBDashboard() {
     );
   }
 
-  // ─── RESULT SCREEN ───
+  // RESULT
   if (screen === SCREEN.RESULT) {
-    const { correct, wrong, skipped, total, pct } = getScore();
-    const grade = pct >= 80 ? "Excellent 🏆" : pct >= 60 ? "Good 👍" : pct >= 40 ? "Needs Work 📖" : "Keep Practicing 💪";
+    const {correct,wrong,skipped,total,pct} = getScore();
+    const grade = pct>=80?"Excellent 🏆":pct>=60?"Good 👍":pct>=40?"Needs Work 📖":"Keep Practicing 💪";
 
     return (
-      <div style={styles.app}>
-        <div style={styles.grain} />
-        <div style={styles.container}>
-          <div style={styles.header}>
-            <div style={styles.badge}>Test Complete</div>
-            <h1 style={{ ...styles.title, fontSize: 26 }}>{grade}</h1>
+      <div style={s.app}>
+        <div style={s.container}>
+          <div style={{textAlign:"center",marginBottom:24,paddingTop:20}}>
+            <div style={s.badge}>Test Complete</div>
+            <h2 style={{fontSize:22,fontWeight:800,color:T.text,marginTop:8}}>{grade}</h2>
           </div>
 
-          {/* Score Circle */}
-          <div style={styles.scoreCircle(pct)}>
-            <div style={styles.scoreInner}>
-              <div style={styles.scorePct}>{pct}%</div>
-              <div style={styles.scoreLabel}>SCORE</div>
+          <div style={s.scoreRing(pct)}>
+            <div style={s.scoreInner}>
+              <div style={s.scorePct}>{pct}%</div>
+              <div style={s.scoreLabel}>SCORE</div>
             </div>
           </div>
 
-          {/* Stats */}
-          <div style={styles.statGrid}>
-            <div style={styles.statBox("#10B981")}>
-              <div style={styles.statNum("#10B981")}>{correct}</div>
-              <div style={styles.statLabel}>Correct</div>
-            </div>
-            <div style={styles.statBox("#EF4444")}>
-              <div style={styles.statNum("#EF4444")}>{wrong}</div>
-              <div style={styles.statLabel}>Wrong</div>
-            </div>
-            <div style={styles.statBox("#F59E0B")}>
-              <div style={styles.statNum("#F59E0B")}>{skipped}</div>
-              <div style={styles.statLabel}>Skipped</div>
-            </div>
+          <div style={s.statGrid}>
+            <div style={s.statBox(T.correct)}><div style={s.statNum(T.correct)}>{correct}</div><div style={s.statLbl}>Correct</div></div>
+            <div style={s.statBox(T.wrong)}><div style={s.statNum(T.wrong)}>{wrong}</div><div style={s.statLbl}>Wrong</div></div>
+            <div style={s.statBox(T.skip)}><div style={s.statNum(T.skip)}>{skipped}</div><div style={s.statLbl}>Skipped</div></div>
           </div>
 
-          {/* Tabs */}
-          <div style={styles.tabRow}>
-            <button style={styles.tab(resultTab === "summary")} onClick={() => setResultTab("summary")}>Summary</button>
-            <button style={styles.tab(resultTab === "review")} onClick={() => setResultTab("review")}>Review All</button>
+          <div style={s.tabRow}>
+            <button style={s.tab(resultTab==="summary")} onClick={()=>setResultTab("summary")}>Summary</button>
+            <button style={s.tab(resultTab==="review")} onClick={()=>setResultTab("review")}>Review All</button>
           </div>
 
-          {resultTab === "summary" && (
-            <div style={styles.card}>
-              <div style={{ fontSize: 14, color: "#94A3B8", lineHeight: 1.8 }}>
-                <p>📊 <strong>Subject:</strong> {SUBJECTS.find(s => s.id === subject)?.label}</p>
+          {resultTab==="summary" && (
+            <div style={s.card}>
+              <div style={{fontSize:13,color:T.textSecondary,lineHeight:1.9}}>
+                <p>📊 <strong>Subject:</strong> {SUBJECTS.find(x=>x.id===subject)?.label}</p>
                 <p>📝 <strong>Questions:</strong> {total}</p>
-                <p>⏱ <strong>Time Used:</strong> {formatTime((total * 60) - timeLeft)} / {formatTime(total * 60)}</p>
-                <p>🎯 <strong>Accuracy:</strong> {total - skipped > 0 ? Math.round((correct / (total - skipped)) * 100) : 0}% (attempted only)</p>
-                {pct < 60 && (
-                  <p style={{ marginTop: 12, padding: 12, borderRadius: 8, background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}>
-                    💡 <strong>Tip:</strong> Head to Revision Notes and review this subject's key concepts before retaking.
-                  </p>
-                )}
+                <p>⏱ <strong>Time Used:</strong> {fmt((total*60)-timeLeft)} / {fmt(total*60)}</p>
+                <p>🎯 <strong>Accuracy:</strong> {total-skipped>0?Math.round((correct/(total-skipped))*100):0}% (attempted)</p>
+                {wrong > 0 && <p style={{marginTop:8,padding:10,borderRadius:8,background:`${T.wrong}08`,border:`1px solid ${T.wrong}20`}}>
+                  ❌ {wrong} wrong answer{wrong>1?"s":""} saved to your Wrong Answers section for revision.
+                </p>}
               </div>
             </div>
           )}
 
-          {resultTab === "review" && questions.map((q, i) => {
-            const userAns = answers[q.id];
-            const isCorrect = userAns === q.correct;
+          {resultTab==="review" && questions.map((q,i)=>{
+            const ua=answers[q.id]; const ic=ua===q.correct;
             return (
-              <div key={i} style={{ ...styles.card, borderLeft: `3px solid ${!userAns ? '#F59E0B' : isCorrect ? '#10B981' : '#EF4444'}` }}>
-                <div style={styles.qNumber}>Q{i + 1} {!userAns ? "⏭ SKIPPED" : isCorrect ? "✅ CORRECT" : "❌ WRONG"}</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#E2E8F0", marginBottom: 12 }}>{q.question}</div>
-                {["A", "B", "C", "D"].map(k => (
-                  <div key={k} style={{
-                    padding: "8px 12px", marginBottom: 4, borderRadius: 8, fontSize: 13,
-                    background: k === q.correct ? "rgba(16,185,129,0.1)" : userAns === k ? "rgba(239,68,68,0.1)" : "transparent",
-                    color: k === q.correct ? "#A7F3D0" : userAns === k ? "#FCA5A5" : "#64748B",
-                    fontWeight: k === q.correct || userAns === k ? 600 : 400,
-                  }}>
-                    {k}. {q.options[k]} {k === q.correct ? " ✓" : ""} {userAns === k && k !== q.correct ? " ✗" : ""}
+              <div key={i} style={{...s.card,borderLeft:`3px solid ${!ua?T.skip:ic?T.correct:T.wrong}`}}>
+                <div style={s.qNum}>Q{i+1} {!ua?"⏭ SKIPPED":ic?"✅ CORRECT":"❌ WRONG"} {q.topic&&`• ${q.topic}`}</div>
+                <div style={{fontSize:14,fontWeight:600,color:T.text,marginBottom:10}}>{q.question}</div>
+                {["A","B","C","D"].map(k=>(
+                  <div key={k} style={{padding:"6px 10px",marginBottom:3,borderRadius:8,fontSize:13,
+                    background:k===q.correct?`${T.correct}10`:ua===k?`${T.wrong}10`:"transparent",
+                    color:k===q.correct?T.correct:ua===k?T.wrong:T.textMuted,
+                    fontWeight:k===q.correct||ua===k?600:400}}>
+                    {k}. {q.options[k]} {k===q.correct?" ✓":""}{ua===k&&k!==q.correct?" ✗":""}
                   </div>
                 ))}
-                <div style={{ ...styles.explanation, marginTop: 8 }}>{q.explanation}</div>
+                <div style={s.expBox}>{q.explanation}</div>
               </div>
             );
           })}
 
-          {/* Actions */}
-          <div style={styles.navRow}>
-            <button style={styles.navBtn(false)} onClick={() => setScreen(SCREEN.HOME)}>← New Test</button>
-            <button style={styles.navBtn(true)} onClick={fetchQuestions}>🔄 Retake</button>
-            <button style={styles.navBtn(false)} onClick={() => setScreen(SCREEN.REVISION)}>📚 Revise</button>
+          <div style={s.navRow}>
+            <button style={s.btnSec} onClick={()=>setScreen(SCREEN.HOME)}>← New Test</button>
+            <button style={s.btnPri} onClick={fetchQuestions}>🔄 Retake</button>
+            <button style={s.btnSec} onClick={()=>setScreen(SCREEN.WRONG)}>❌ Wrong Answers</button>
           </div>
         </div>
       </div>
     );
   }
 
-  // ─── REVISION SCREEN ───
+  // REVISION
   if (screen === SCREEN.REVISION) {
     const notes = REVISION_NOTES[revSubject] || [];
-    const currentSubjectData = SUBJECTS.find(s => s.id === revSubject);
+    const curSub = SUBJECTS.find(x=>x.id===revSubject);
 
     return (
-      <div style={styles.app}>
-        <div style={styles.grain} />
-        <div style={styles.container}>
-          <div style={styles.header}>
-            <div style={styles.badge}>Revision Mode</div>
-            <h1 style={{ ...styles.title, fontSize: 26 }}>Quick Revision Notes</h1>
-            <p style={styles.subtitle}>Tap to expand • Key facts for rapid review</p>
+      <div style={s.app}>
+        <div style={s.container}>
+          <div style={s.header}>
+            <div>
+              <div style={s.badge}>Revision Mode</div>
+              <h1 style={{...s.title,fontSize:24}}>Quick Revision Notes</h1>
+              <p style={s.subtitle}>Tap topics to expand — key facts for rapid review</p>
+            </div>
+            <button style={s.themeBtn} onClick={toggleTheme}>{theme==="dark"?"☀️":"🌙"}</button>
           </div>
 
-          {/* Back + Practice */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
-            <button style={{ ...styles.navBtn(true), flex: "none", padding: "10px 24px" }} onClick={() => setScreen(SCREEN.HOME)}>
-              📝 Practice
-            </button>
-            <button style={{ ...styles.navBtn(false), flex: "none", padding: "10px 24px", background: "rgba(14,124,107,0.15)", color: "#4FD1B5" }}>
-              📚 Revision Notes
-            </button>
+          <div style={s.nav}>
+            <button style={s.navBtn(false)} onClick={()=>setScreen(SCREEN.HOME)}>📝 Practice</button>
+            <button style={s.navBtn(true)}>📚 Revision Notes</button>
+            <button style={s.navBtn(false)} onClick={()=>setScreen(SCREEN.WRONG)}>❌ Wrong Answers {wrongAnswers.length>0&&`(${wrongAnswers.length})`}</button>
           </div>
 
-          {/* Subject tabs for revision */}
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
-            {SUBJECTS.map(s => (
-              <button
-                key={s.id}
-                onClick={() => { setRevSubject(s.id); setOpenNotes({}); }}
-                style={{
-                  padding: "8px 16px", borderRadius: 8, border: `1px solid ${revSubject === s.id ? s.color : 'rgba(255,255,255,0.08)'}`,
-                  background: revSubject === s.id ? `${s.color}20` : "rgba(255,255,255,0.03)",
-                  color: revSubject === s.id ? "#E2E8F0" : "#64748B",
-                  fontSize: 12, fontWeight: 600, cursor: "pointer",
-                }}
-              >
-                {s.icon} {s.label.split(" ")[0]}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:20}}>
+            {SUBJECTS.map(sub=>(
+              <button key={sub.id} onClick={()=>{setRevSubject(sub.id);setOpenNotes({});}}
+                style={{padding:"8px 16px",borderRadius:8,border:`1px solid ${revSubject===sub.id?sub.color:T.border}`,
+                  background:revSubject===sub.id?`${sub.color}15`:T.bgCard,color:revSubject===sub.id?T.text:T.textMuted,
+                  fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                {sub.icon} {sub.label}
               </button>
             ))}
           </div>
 
-          {/* Notes */}
-          {notes.map((note, i) => (
-            <div key={i} style={styles.revCard}>
-              <div
-                style={styles.revHeader(openNotes[i])}
-                onClick={() => setOpenNotes(prev => ({ ...prev, [i]: !prev[i] }))}
-              >
-                <span style={styles.revTitle}>{note.title}</span>
-                <span style={{ color: "#64748B", fontSize: 18, transition: "transform 0.2s", transform: openNotes[i] ? "rotate(180deg)" : "none" }}>▾</span>
+          <div style={{marginBottom:12,fontSize:13,color:T.textMuted}}>
+            {notes.length} topics • {notes.reduce((a,n)=>a+n.points.length,0)} revision points
+          </div>
+
+          {notes.map((note,i)=>(
+            <div key={i} style={s.revCard}>
+              <div style={s.revHdr(openNotes[i])} onClick={()=>setOpenNotes(p=>({...p,[i]:!p[i]}))}>
+                <span style={s.revTitle}>{note.title}</span>
+                <span style={{color:T.textMuted,fontSize:16,transition:"transform 0.2s",transform:openNotes[i]?"rotate(180deg)":"none"}}>▾</span>
               </div>
               {openNotes[i] && (
-                <div style={styles.revBody}>
-                  {note.points.map((p, j) => (
-                    <div key={j} style={styles.revBullet}>
-                      <div style={styles.dot(currentSubjectData?.color)} />
+                <div style={s.revBody}>
+                  {note.points.map((p,j)=>(
+                    <div key={j} style={s.revPt}>
+                      <div style={s.dot(curSub?.color)}/>
                       <span>{p}</span>
                     </div>
                   ))}
@@ -754,11 +1069,92 @@ export default function RBIGradeBDashboard() {
               )}
             </div>
           ))}
+        </div>
+      </div>
+    );
+  }
 
-          {notes.length === 0 && (
-            <div style={{ ...styles.card, textAlign: "center", padding: 40 }}>
-              <p style={{ fontSize: 14, color: "#64748B" }}>More revision notes coming soon for this subject! 🚧</p>
+  // WRONG ANSWERS
+  if (screen === SCREEN.WRONG) {
+    const subjects = [...new Set(wrongAnswers.map(w=>w.subject))];
+    const topics = [...new Set(wrongAnswers.filter(w=>wrongFilter==="all"||w.subject===wrongFilter).map(w=>w.topic))];
+    const filtered = wrongAnswers.filter(w=>(wrongFilter==="all"||w.subject===wrongFilter));
+    // Group by topic
+    const grouped = {};
+    filtered.forEach(w => { if (!grouped[w.topic]) grouped[w.topic]=[]; grouped[w.topic].push(w); });
+
+    return (
+      <div style={s.app}>
+        <div style={s.container}>
+          <div style={s.header}>
+            <div>
+              <div style={s.badge}>Wrong Answers</div>
+              <h1 style={{...s.title,fontSize:24}}>Revision from Mistakes</h1>
+              <p style={s.subtitle}>{wrongAnswers.length} questions saved • grouped by topic</p>
             </div>
+            <button style={s.themeBtn} onClick={toggleTheme}>{theme==="dark"?"☀️":"🌙"}</button>
+          </div>
+
+          <div style={s.nav}>
+            <button style={s.navBtn(false)} onClick={()=>setScreen(SCREEN.HOME)}>📝 Practice</button>
+            <button style={s.navBtn(false)} onClick={()=>setScreen(SCREEN.REVISION)}>📚 Revision Notes</button>
+            <button style={s.navBtn(true)}>❌ Wrong Answers ({wrongAnswers.length})</button>
+          </div>
+
+          {/* Filter */}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:20}}>
+            <button onClick={()=>setWrongFilter("all")}
+              style={{padding:"7px 16px",borderRadius:8,border:`1px solid ${wrongFilter==="all"?T.accent:T.border}`,
+                background:wrongFilter==="all"?T.accentGlow:T.bgCard,color:wrongFilter==="all"?T.accent:T.textMuted,
+                fontSize:12,fontWeight:600,cursor:"pointer"}}>All ({wrongAnswers.length})</button>
+            {subjects.map(sid=>{
+              const sub=SUBJECTS.find(x=>x.id===sid);
+              const cnt=wrongAnswers.filter(w=>w.subject===sid).length;
+              return (
+                <button key={sid} onClick={()=>setWrongFilter(sid)}
+                  style={{padding:"7px 16px",borderRadius:8,border:`1px solid ${wrongFilter===sid?sub?.color||T.accent:T.border}`,
+                    background:wrongFilter===sid?`${sub?.color||T.accent}15`:T.bgCard,
+                    color:wrongFilter===sid?T.text:T.textMuted,fontSize:12,fontWeight:600,cursor:"pointer"}}>
+                  {sub?.icon} {sub?.label.split(" ")[0]} ({cnt})
+                </button>
+              );
+            })}
+          </div>
+
+          {wrongAnswers.length === 0 ? (
+            <div style={{...s.card,textAlign:"center",padding:40}}>
+              <p style={{fontSize:32,marginBottom:12}}>🎉</p>
+              <p style={{fontSize:14,color:T.textMuted}}>No wrong answers yet! Take a practice test to start tracking.</p>
+            </div>
+          ) : (
+            Object.entries(grouped).map(([topic, items]) => (
+              <div key={topic} style={{marginBottom:20}}>
+                <div style={{fontSize:13,fontWeight:700,color:T.accent,marginBottom:8,textTransform:"uppercase",letterSpacing:0.8}}>
+                  {topic} ({items.length})
+                </div>
+                {items.map((w,i)=>(
+                  <div key={i} style={{...s.card,borderLeft:`3px solid ${T.wrong}`,padding:16,marginBottom:8}}>
+                    <div style={{fontSize:10,color:T.textMuted,marginBottom:6}}>{SUBJECTS.find(x=>x.id===w.subject)?.label} • {w.date}</div>
+                    <div style={{fontSize:14,fontWeight:600,color:T.text,marginBottom:10}}>{w.question}</div>
+                    {["A","B","C","D"].map(k=>(
+                      <div key={k} style={{padding:"5px 8px",marginBottom:2,borderRadius:6,fontSize:12,
+                        background:k===w.correct?`${T.correct}10`:w.userAnswer===k?`${T.wrong}10`:"transparent",
+                        color:k===w.correct?T.correct:w.userAnswer===k?T.wrong:T.textMuted,
+                        fontWeight:k===w.correct||w.userAnswer===k?600:400}}>
+                        {k}. {w.options[k]} {k===w.correct?" ✓":""}{w.userAnswer===k&&k!==w.correct?" (your answer)":""}
+                      </div>
+                    ))}
+                    <div style={{...s.expBox,marginTop:8,fontSize:12}}>{w.explanation}</div>
+                  </div>
+                ))}
+              </div>
+            ))
+          )}
+
+          {wrongAnswers.length > 0 && (
+            <button style={{...s.btnSec,marginTop:12,color:T.wrong}} onClick={()=>{
+              if (confirm("Clear all wrong answers? This cannot be undone.")) { setWrongAnswers([]); saveWrongAnswers([]); }
+            }}>🗑 Clear All Wrong Answers</button>
           )}
         </div>
       </div>
