@@ -586,7 +586,49 @@ function saveStats(data) { try { localStorage.setItem(LS_STATS, JSON.stringify(d
 // ═══════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════
-const SCREEN = { HOME: 0, QUIZ: 1, RESULT: 2, REVISION: 3, WRONG: 4 };
+const SCREEN = { HOME: 0, QUIZ: 1, RESULT: 2, REVISION: 3, WRONG: 4, MOCK_HOME: 5, MOCK_QUIZ: 6, MOCK_RESULT: 7 };
+
+// ═══════════════════════════════════════════════════════════
+// RBI GRADE B PHASE 1 MOCK TEST CONFIGURATION
+// ═══════════════════════════════════════════════════════════
+// Phase 1: 200 questions, 120 minutes
+// Sections: GA(80), Quant(30), English(30), Reasoning(60)
+// Marking: +1 correct, -0.25 wrong
+const MOCK_CONFIG = {
+  totalTime: 120 * 60, // 120 minutes in seconds
+  marking: { correct: 1, wrong: -0.25 },
+  sections: [
+    { id: "ga", label: "General Awareness", count: 80, bank: "ga" },
+    { id: "quant", label: "Quantitative Aptitude", count: 30, bank: "quant" },
+    { id: "english", label: "English Language", count: 30, bank: "english" },
+    { id: "reasoning", label: "Reasoning Ability", count: 60, bank: "reasoning" },
+  ],
+  totalQuestions: 200,
+};
+
+function generateMockTest(testNumber) {
+  const seed = testNumber * 7919; // Different seed per test for reproducibility
+  const seededRandom = (arr, n, offset) => {
+    const shuffled = [...arr];
+    // Fisher-Yates with deterministic seed
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.abs(((seed + offset + i) * 2654435761) % (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled.slice(0, n);
+  };
+
+  let allQuestions = [];
+  let qId = 1;
+  MOCK_CONFIG.sections.forEach((sec, si) => {
+    const bank = FALLBACK_BANK[sec.bank] || [];
+    const picked = seededRandom(bank, Math.min(sec.count, bank.length), si * 1000);
+    picked.forEach(q => {
+      allQuestions.push({ ...q, id: qId++, section: sec.id, sectionLabel: sec.label });
+    });
+  });
+  return allQuestions;
+}
 
 export default function App() {
   const [theme, setTheme] = useState(loadTheme);
@@ -612,9 +654,18 @@ export default function App() {
 
   // Timer
   useEffect(() => {
-    if (screen === SCREEN.QUIZ && timeLeft > 0) {
+    if ((screen === SCREEN.QUIZ || screen === SCREEN.MOCK_QUIZ) && timeLeft > 0) {
       timerRef.current = setInterval(() => {
-        setTimeLeft(t => { if (t <= 1) { clearInterval(timerRef.current); setScreen(SCREEN.RESULT); return 0; } return t - 1; });
+        setTimeLeft(t => {
+          if (t <= 1) {
+            clearInterval(timerRef.current);
+            if (screen === SCREEN.MOCK_QUIZ) setScreen(SCREEN.MOCK_RESULT);
+            else setScreen(SCREEN.RESULT);
+            return 0;
+          }
+          return t - 1;
+        });
+      }, 1000);
       }, 1000);
       return () => clearInterval(timerRef.current);
     }
@@ -730,6 +781,27 @@ export default function App() {
     setScreen(SCREEN.RESULT);
   };
 
+  const finishMockTest = () => {
+    // Save wrong answers from mock test
+    const newWrong = [];
+    questions.forEach(q => {
+      if (answers[q.id] && answers[q.id] !== q.correct) {
+        newWrong.push({
+          question: q.question, options: q.options, correct: q.correct,
+          userAnswer: answers[q.id], explanation: q.explanation,
+          topic: q.topic || "General", subject: q.section || "ga",
+          date: new Date().toISOString().split("T")[0],
+        });
+      }
+    });
+    if (newWrong.length > 0) {
+      const updated = [...wrongAnswers, ...newWrong].slice(-500);
+      setWrongAnswers(updated);
+      saveWrongAnswers(updated);
+    }
+    setScreen(SCREEN.MOCK_RESULT);
+  };
+
   const getScore = () => {
     let correct=0, wrong=0, skipped=0;
     questions.forEach(q => {
@@ -737,7 +809,9 @@ export default function App() {
       else if (answers[q.id]===q.correct) correct++;
       else wrong++;
     });
-    return { correct, wrong, skipped, total: questions.length, pct: Math.round((correct/questions.length)*100) };
+    const marks = correct * 1 + wrong * (-0.25);
+    const maxMarks = questions.length;
+    return { correct, wrong, skipped, total: questions.length, pct: Math.round((correct/questions.length)*100), marks, maxMarks, negMarks: wrong * 0.25 };
   };
 
   const getOptState = (q, key) => {
@@ -781,7 +855,7 @@ export default function App() {
     progOuter: { height:5, background:T.bgCard, borderRadius:3, marginBottom:20, overflow:"hidden" },
     progInner: (pct,col) => ({ height:"100%", width:`${pct}%`, background:col||T.accent, borderRadius:3, transition:"width 0.3s" }),
     qNum: { fontSize:11, color:T.textMuted, fontWeight:700, letterSpacing:1, marginBottom:6 },
-    qText: { fontSize:17, fontWeight:600, color:T.text, lineHeight:1.55, marginBottom:20 },
+    qText: { fontSize:15, fontWeight:500, color:T.text, lineHeight:1.65, marginBottom:20, whiteSpace:"pre-wrap" },
     optBtn: (st) => {
       const base = { width:"100%", padding:"14px 18px", borderRadius:12, textAlign:"left", cursor:st==="dis"?"default":"pointer", fontSize:14, fontWeight:500, display:"flex", alignItems:"center", gap:12, marginBottom:7, transition:"all 0.15s" };
       if (st==="correct") return { ...base, background:`${T.correct}15`, border:`1.5px solid ${T.correct}`, color:T.correct };
@@ -844,6 +918,7 @@ export default function App() {
 
           <div style={s.nav}>
             <button style={s.navBtn(true)}>📝 Practice</button>
+            <button style={s.navBtn(false)} onClick={()=>setScreen(SCREEN.MOCK_HOME)}>🎯 Full Mock Test</button>
             <button style={s.navBtn(false)} onClick={()=>setScreen(SCREEN.REVISION)}>📚 Revision Notes</button>
             <button style={s.navBtn(false)} onClick={()=>setScreen(SCREEN.WRONG)}>
               ❌ Wrong Answers {wrongAnswers.length > 0 && `(${wrongAnswers.length})`}
@@ -899,7 +974,7 @@ export default function App() {
           <div style={s.card}>
             <div style={s.qNum}>QUESTION {currentQ+1} OF {questions.length} {q.topic && `• ${q.topic}`}</div>
             <div style={s.qText}>{q.question}</div>
-            {["A","B","C","D"].map(k => {
+            {["a","b","c","d","e"].map(k => {
               const st = showExp ? getOptState(q,k) : (answers[q.id]===k?"sel":"def");
               return (
                 <div key={k} style={s.optBtn(st)} onClick={()=>handleAnswer(q.id,k)}>
@@ -941,7 +1016,7 @@ export default function App() {
 
   // RESULT
   if (screen === SCREEN.RESULT) {
-    const {correct,wrong,skipped,total,pct} = getScore();
+    const {correct,wrong,skipped,total,pct,marks,maxMarks,negMarks} = getScore();
     const grade = pct>=80?"Excellent 🏆":pct>=60?"Good 👍":pct>=40?"Needs Work 📖":"Keep Practicing 💪";
 
     return (
@@ -977,6 +1052,7 @@ export default function App() {
                 <p>📝 <strong>Questions:</strong> {total}</p>
                 <p>⏱ <strong>Time Used:</strong> {fmt((total*60)-timeLeft)} / {fmt(total*60)}</p>
                 <p>🎯 <strong>Accuracy:</strong> {total-skipped>0?Math.round((correct/(total-skipped))*100):0}% (attempted)</p>
+                <p>📊 <strong>Marks:</strong> {marks.toFixed(2)} / {maxMarks} (+{correct} correct, -{negMarks.toFixed(2)} negative)</p>
                 {wrong > 0 && <p style={{marginTop:8,padding:10,borderRadius:8,background:`${T.wrong}08`,border:`1px solid ${T.wrong}20`}}>
                   ❌ {wrong} wrong answer{wrong>1?"s":""} saved to your Wrong Answers section for revision.
                 </p>}
@@ -990,7 +1066,7 @@ export default function App() {
               <div key={i} style={{...s.card,borderLeft:`3px solid ${!ua?T.skip:ic?T.correct:T.wrong}`}}>
                 <div style={s.qNum}>Q{i+1} {!ua?"⏭ SKIPPED":ic?"✅ CORRECT":"❌ WRONG"} {q.topic&&`• ${q.topic}`}</div>
                 <div style={{fontSize:14,fontWeight:600,color:T.text,marginBottom:10}}>{q.question}</div>
-                {["A","B","C","D"].map(k=>(
+                {["a","b","c","d","e"].map(k=>(
                   <div key={k} style={{padding:"6px 10px",marginBottom:3,borderRadius:8,fontSize:13,
                     background:k===q.correct?`${T.correct}10`:ua===k?`${T.wrong}10`:"transparent",
                     color:k===q.correct?T.correct:ua===k?T.wrong:T.textMuted,
@@ -1136,7 +1212,7 @@ export default function App() {
                   <div key={i} style={{...s.card,borderLeft:`3px solid ${T.wrong}`,padding:16,marginBottom:8}}>
                     <div style={{fontSize:10,color:T.textMuted,marginBottom:6}}>{SUBJECTS.find(x=>x.id===w.subject)?.label} • {w.date}</div>
                     <div style={{fontSize:14,fontWeight:600,color:T.text,marginBottom:10}}>{w.question}</div>
-                    {["A","B","C","D"].map(k=>(
+                    {["a","b","c","d","e"].map(k=>(
                       <div key={k} style={{padding:"5px 8px",marginBottom:2,borderRadius:6,fontSize:12,
                         background:k===w.correct?`${T.correct}10`:w.userAnswer===k?`${T.wrong}10`:"transparent",
                         color:k===w.correct?T.correct:w.userAnswer===k?T.wrong:T.textMuted,
@@ -1156,6 +1232,243 @@ export default function App() {
               if (confirm("Clear all wrong answers? This cannot be undone.")) { setWrongAnswers([]); saveWrongAnswers([]); }
             }}>🗑 Clear All Wrong Answers</button>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // ─── MOCK TEST HOME ───
+  if (screen === SCREEN.MOCK_HOME) {
+    return (
+      <div style={s.app}>
+        <div style={s.container}>
+          <div style={s.header}>
+            <div>
+              <div style={s.badge}>Full Mock Test</div>
+              <h1 style={{...s.title,fontSize:24}}>RBI Grade B — Phase 1</h1>
+              <p style={s.subtitle}>200 Questions • 120 Minutes • +1/-0.25 Marking</p>
+            </div>
+            <button style={s.themeBtn} onClick={toggleTheme}>{theme==="dark"?"☀️":"🌙"}</button>
+          </div>
+          <div style={s.nav}>
+            <button style={s.navBtn(false)} onClick={()=>setScreen(SCREEN.HOME)}>📝 Practice</button>
+            <button style={s.navBtn(true)}>🎯 Full Mock Test</button>
+            <button style={s.navBtn(false)} onClick={()=>setScreen(SCREEN.REVISION)}>📚 Revision Notes</button>
+          </div>
+          <div style={s.card}>
+            <div style={s.cardTitle}>Phase 1 Pattern</div>
+            <div style={{fontSize:13,color:T.textSecondary,lineHeight:1.8}}>
+              <p>📊 General Awareness — 80 Questions (80 marks)</p>
+              <p>🔢 Quantitative Aptitude — 30 Questions (30 marks)</p>
+              <p>📝 English Language — 30 Questions (30 marks)</p>
+              <p>🧩 Reasoning Ability — 60 Questions (60 marks)</p>
+              <p style={{marginTop:8,color:T.accent}}>Total: 200 Questions • 200 Marks • 120 Minutes</p>
+              <p style={{fontSize:11,color:T.textMuted,marginTop:4}}>Marking: +1 for correct, -0.25 for wrong, 0 for unattempted</p>
+            </div>
+          </div>
+          <div style={s.cardTitle}>Select Mock Test</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
+            {[1,2,3,4,5,6,7,8,9,10].map(n=>(
+              <div key={n} style={{...s.card,cursor:"pointer",textAlign:"center",padding:20}} onClick={()=>{
+                const qs = generateMockTest(n);
+                setQuestions(qs);
+                setTimeLeft(MOCK_CONFIG.totalTime);
+                setCurrentQ(0);
+                setAnswers({});
+                setShowExp(false);
+                setSubject("mock_"+n);
+                setScreen(SCREEN.MOCK_QUIZ);
+              }}>
+                <div style={{fontSize:28,marginBottom:8}}>📋</div>
+                <div style={{fontSize:16,fontWeight:700,color:T.text}}>Mock Test {n}</div>
+                <div style={{fontSize:11,color:T.textMuted,marginTop:4}}>200 Qs • 2 hrs</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── MOCK TEST QUIZ ───
+  if (screen === SCREEN.MOCK_QUIZ && questions.length > 0) {
+    const q = questions[currentQ];
+    const progress = ((currentQ+1)/questions.length)*100;
+    const answered = Object.keys(answers).length;
+    const sectionCounts = {};
+    MOCK_CONFIG.sections.forEach(sec => {
+      const secQs = questions.filter(qq => qq.section === sec.id);
+      const secAnswered = secQs.filter(qq => answers[qq.id]).length;
+      sectionCounts[sec.id] = { total: secQs.length, answered: secAnswered };
+    });
+
+    return (
+      <div style={s.app}>
+        <div style={s.container}>
+          <div style={s.timerBar}>
+            <span style={{fontSize:11,color:T.textMuted}}>{q.sectionLabel} • Q{currentQ+1}/{questions.length}</span>
+            <div style={s.timer(timeLeft<300)}>{fmt(timeLeft)}</div>
+            <span style={{fontSize:11,color:T.textMuted}}>{answered}/{questions.length} done</span>
+          </div>
+          <div style={s.progOuter}><div style={s.progInner(progress,T.accent)}/></div>
+
+          {/* Section tabs */}
+          <div style={{display:"flex",gap:4,marginBottom:12,flexWrap:"wrap"}}>
+            {MOCK_CONFIG.sections.map(sec=>{
+              const isActive = q.section === sec.id;
+              const sc = sectionCounts[sec.id];
+              const firstIdx = questions.findIndex(qq=>qq.section===sec.id);
+              return (
+                <button key={sec.id} onClick={()=>{setCurrentQ(firstIdx);setShowExp(false);}}
+                  style={{padding:"6px 12px",borderRadius:8,border:`1px solid ${isActive?T.accent:T.border}`,
+                    background:isActive?T.accentGlow:"transparent",color:isActive?T.accent:T.textMuted,
+                    fontSize:11,fontWeight:600,cursor:"pointer"}}>
+                  {sec.label.split(" ")[0]} ({sc.answered}/{sc.total})
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={s.card}>
+            <div style={s.qNum}>{q.sectionLabel} • QUESTION {currentQ+1} OF {questions.length} {q.topic&&`• ${q.topic}`}</div>
+            <div style={s.qText}>{q.question}</div>
+            {["a","b","c","d","e"].map(k => {
+              const isSelected = answers[q.id]===k;
+              return (
+                <div key={k} style={s.optBtn(isSelected?"sel":"def")} onClick={()=>{
+                  setAnswers(p=>({...p,[q.id]:p[q.id]===k?undefined:k})); // toggle selection
+                }}>
+                  <div style={s.optKey(isSelected?"sel":"def")}>{k}</div>
+                  <div style={{flex:1}}>{q.options[k]}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={s.navRow}>
+            <button style={s.btnSec} onClick={()=>{if(currentQ>0){setCurrentQ(c=>c-1);setShowExp(false);}}} disabled={currentQ===0}>← Prev</button>
+            <button style={{...s.btnSec,color:T.skip}} onClick={()=>{
+              if(answers[q.id]) setAnswers(p=>{const n={...p};delete n[q.id];return n;});
+            }}>Clear</button>
+            <button style={s.btnPri} onClick={()=>{
+              if(currentQ<questions.length-1){setCurrentQ(c=>c+1);setShowExp(false);}
+              else if(confirm("Submit the test? You still have time remaining.")){clearInterval(timerRef.current);finishMockTest();}
+            }}>{currentQ===questions.length-1?"Submit →":"Next →"}</button>
+          </div>
+
+          {/* Submit button */}
+          <button style={{...s.startBtn(false),marginTop:12,background:T.wrong}} onClick={()=>{
+            if(confirm(`Submit test? ${answered}/${questions.length} answered. ${questions.length-answered} unattempted.`)){
+              clearInterval(timerRef.current);finishMockTest();
+            }
+          }}>🏁 Submit Test</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── MOCK TEST RESULT ───
+  if (screen === SCREEN.MOCK_RESULT) {
+    const mk = MOCK_CONFIG.marking;
+    let totalMarks=0, totalCorrect=0, totalWrong=0, totalSkipped=0;
+    const sectionResults = {};
+
+    MOCK_CONFIG.sections.forEach(sec => {
+      const secQs = questions.filter(q=>q.section===sec.id);
+      let correct=0, wrong=0, skipped=0, marks=0;
+      secQs.forEach(q=>{
+        if(!answers[q.id]) skipped++;
+        else if(answers[q.id]===q.correct){correct++;marks+=mk.correct;}
+        else{wrong++;marks+=mk.wrong;}
+      });
+      sectionResults[sec.id]={correct,wrong,skipped,total:secQs.length,marks,maxMarks:secQs.length*mk.correct};
+      totalMarks+=marks;totalCorrect+=correct;totalWrong+=wrong;totalSkipped+=skipped;
+    });
+
+    const totalMax = questions.length * mk.correct;
+    const pct = Math.round((totalMarks/totalMax)*100);
+    const negMarks = totalWrong * Math.abs(mk.wrong);
+    const grade = pct>=70?"Excellent 🏆":pct>=50?"Good 👍":pct>=35?"Average 📖":"Needs Improvement 💪";
+
+    return (
+      <div style={s.app}>
+        <div style={s.container}>
+          <div style={{textAlign:"center",marginBottom:20,paddingTop:16}}>
+            <div style={s.badge}>Mock Test Complete</div>
+            <h2 style={{fontSize:22,fontWeight:800,color:T.text,marginTop:8}}>{grade}</h2>
+          </div>
+
+          {/* Score */}
+          <div style={{...s.card,textAlign:"center",padding:24}}>
+            <div style={{fontSize:48,fontWeight:800,color:totalMarks>=totalMax*0.5?T.correct:totalMarks>=totalMax*0.35?T.skip:T.wrong}}>
+              {totalMarks.toFixed(2)}
+            </div>
+            <div style={{fontSize:13,color:T.textMuted}}>out of {totalMax} marks</div>
+            <div style={{display:"flex",justifyContent:"center",gap:20,marginTop:16}}>
+              <div><span style={{fontSize:18,fontWeight:700,color:T.correct}}>{totalCorrect}</span><br/><span style={{fontSize:10,color:T.textMuted}}>Correct (+{totalCorrect*mk.correct})</span></div>
+              <div><span style={{fontSize:18,fontWeight:700,color:T.wrong}}>{totalWrong}</span><br/><span style={{fontSize:10,color:T.textMuted}}>Wrong (-{negMarks.toFixed(2)})</span></div>
+              <div><span style={{fontSize:18,fontWeight:700,color:T.skip}}>{totalSkipped}</span><br/><span style={{fontSize:10,color:T.textMuted}}>Skipped (0)</span></div>
+            </div>
+            <div style={{marginTop:12,fontSize:12,color:T.textMuted}}>
+              ⏱ Time Used: {fmt((MOCK_CONFIG.totalTime)-timeLeft)} / {fmt(MOCK_CONFIG.totalTime)}
+              &nbsp;• Accuracy: {totalCorrect+totalWrong>0?Math.round((totalCorrect/(totalCorrect+totalWrong))*100):0}%
+            </div>
+          </div>
+
+          {/* Section-wise Breakdown */}
+          <div style={s.cardTitle}>Section-wise Breakdown</div>
+          {MOCK_CONFIG.sections.map(sec=>{
+            const r=sectionResults[sec.id];
+            const secPct=r.total>0?Math.round((r.marks/r.maxMarks)*100):0;
+            return (
+              <div key={sec.id} style={{...s.card,padding:16,marginBottom:8}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <span style={{fontSize:14,fontWeight:700,color:T.text}}>{sec.label}</span>
+                  <span style={{fontSize:16,fontWeight:800,color:secPct>=50?T.correct:secPct>=35?T.skip:T.wrong}}>
+                    {r.marks.toFixed(2)}/{r.maxMarks}
+                  </span>
+                </div>
+                <div style={s.progOuter}><div style={s.progInner(Math.max(0,secPct),secPct>=50?T.correct:secPct>=35?T.skip:T.wrong)}/></div>
+                <div style={{display:"flex",gap:16,marginTop:8,fontSize:11,color:T.textMuted}}>
+                  <span>✅ {r.correct} correct</span>
+                  <span>❌ {r.wrong} wrong (-{(r.wrong*Math.abs(mk.wrong)).toFixed(2)})</span>
+                  <span>⏭ {r.skipped} skipped</span>
+                  <span>🎯 {r.correct+r.wrong>0?Math.round((r.correct/(r.correct+r.wrong))*100):0}% accuracy</span>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Review */}
+          <div style={s.cardTitle}>Review Answers</div>
+          {MOCK_CONFIG.sections.map(sec=>(
+            <details key={sec.id} style={{marginBottom:12}}>
+              <summary style={{cursor:"pointer",fontSize:14,fontWeight:600,color:T.accent,padding:"8px 0"}}>{sec.label} ({sectionResults[sec.id].correct}/{sectionResults[sec.id].total} correct)</summary>
+              {questions.filter(q=>q.section===sec.id).map((q,i)=>{
+                const ua=answers[q.id]; const ic=ua===q.correct;
+                return (
+                  <div key={i} style={{...s.card,borderLeft:`3px solid ${!ua?T.skip:ic?T.correct:T.wrong}`,padding:14,marginBottom:6}}>
+                    <div style={{fontSize:10,color:T.textMuted}}>Q{q.id} {!ua?"⏭ SKIPPED":ic?"✅ +1":` ❌ -0.25`}</div>
+                    <div style={{fontSize:13,fontWeight:600,color:T.text,marginBottom:8}}>{q.question}</div>
+                    {["a","b","c","d","e"].map(k=>(
+                      <div key={k} style={{padding:"4px 8px",marginBottom:2,borderRadius:6,fontSize:12,
+                        background:k===q.correct?`${T.correct}10`:ua===k&&k!==q.correct?`${T.wrong}10`:"transparent",
+                        color:k===q.correct?T.correct:ua===k?T.wrong:T.textMuted,
+                        fontWeight:k===q.correct||ua===k?600:400}}>
+                        {k}. {q.options[k]} {k===q.correct?" ✓":""}{ua===k&&k!==q.correct?" ✗":""}
+                      </div>
+                    ))}
+                    <div style={{...s.expBox,marginTop:6,fontSize:11}}>{q.explanation}</div>
+                  </div>
+                );
+              })}
+            </details>
+          ))}
+
+          <div style={s.navRow}>
+            <button style={s.btnSec} onClick={()=>setScreen(SCREEN.MOCK_HOME)}>← More Tests</button>
+            <button style={s.btnPri} onClick={()=>setScreen(SCREEN.HOME)}>🏠 Home</button>
+          </div>
         </div>
       </div>
     );
