@@ -27,7 +27,8 @@ const THEMES = {
 // SUBJECTS
 // ═══════════════════════════════════════════════════════════
 const SUBJECTS = [
-  { id: "ga", label: "General Awareness", icon: "🌍", color: "#2E5A88", desc: "Banking, Current Affairs, Static GK" },
+  { id: "ga", label: "General Awareness", icon: "🌍", color: "#2E5A88", desc: "Banking, Static GK, Constitution, Orgs" },
+  { id: "ca", label: "Current Affairs", icon: "📰", color: "#C0392B", desc: "Last 6 months — RBI, Budget, Economy, Events" },
   { id: "esi", label: "Economic & Social Issues", icon: "📊", color: "#0E7C6B", desc: "Indian Economy, Monetary Policy, Social Dev" },
   { id: "fm", label: "Finance & Management", icon: "💰", color: "#B8860B", desc: "Banking, Financial Markets, Management" },
   { id: "quant", label: "Quantitative Aptitude", icon: "🔢", color: "#8B3A62", desc: "DI, Arithmetic, Number Series" },
@@ -35,7 +36,7 @@ const SUBJECTS = [
   { id: "reasoning", label: "Reasoning Ability", icon: "🧩", color: "#9B4D2B", desc: "Puzzles, Syllogism, Coding-Decoding" },
 ];
 
-const QCOUNTS = [10, 15, 20, 25];
+const QCOUNTS = [10, 15, 20, 25, 30, 50, 80];
 
 // ═══════════════════════════════════════════════════════════
 // SYSTEM PROMPT FOR AI QUESTION GENERATION
