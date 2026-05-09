@@ -648,6 +648,7 @@ export default function App() {
   const [openNotes, setOpenNotes] = useState({});
   const [revSubject, setRevSubject] = useState("esi");
   const [wrongFilter, setWrongFilter] = useState("all");
+  const [caLatestOnly, setCaLatestOnly] = useState(false);
   const timerRef = useRef(null);
 
   const T = THEMES[theme];
@@ -724,7 +725,13 @@ export default function App() {
   };
 
   const useFallback = () => {
-    const bank = FALLBACK_BANK[subject] || FALLBACK_BANK.esi;
+    let bank = FALLBACK_BANK[subject] || FALLBACK_BANK.esi;
+    // If Current Affairs and "Latest Only" is on, filter to latest batch only
+    if (subject === "ca" && caLatestOnly) {
+      // Find the highest batch number in the bank
+      const maxBatch = Math.max(...bank.map(q => q.batch || 1));
+      bank = bank.filter(q => (q.batch || 1) === maxBatch);
+    }
     const used = usedQuestions[subject] || [];
     // Prefer unused questions
     const unused = bank.filter(q => !used.includes(q.question));
@@ -946,6 +953,32 @@ export default function App() {
             </div>
             <p style={{fontSize:12,color:T.textMuted,marginTop:10}}>⏱ {qCount} minutes • 1 min/question • -0.25 negative marking</p>
           </div>
+
+          {/* Latest Only toggle — only for Current Affairs */}
+          {subject === "ca" && (
+            <div style={{...s.card,display:"flex",justifyContent:"space-between",alignItems:"center",padding:16}}>
+              <div>
+                <div style={{fontSize:14,fontWeight:700,color:T.text}}>📌 Show Latest Batch Only</div>
+                <div style={{fontSize:11,color:T.textMuted,marginTop:2}}>
+                  {caLatestOnly
+                    ? `Only latest batch (${(FALLBACK_BANK.ca||[]).filter(q=>(q.batch||1)===Math.max(...(FALLBACK_BANK.ca||[]).map(x=>x.batch||1))).length} questions)`
+                    : `All current affairs (${(FALLBACK_BANK.ca||[]).length} questions)`}
+                </div>
+              </div>
+              <div onClick={()=>setCaLatestOnly(!caLatestOnly)} style={{
+                width:48,height:26,borderRadius:13,cursor:"pointer",transition:"all 0.2s",
+                background:caLatestOnly?T.accent:"rgba(255,255,255,0.1)",
+                border:`1px solid ${caLatestOnly?T.accent:T.border}`,
+                position:"relative",display:"flex",alignItems:"center",padding:2,
+              }}>
+                <div style={{
+                  width:20,height:20,borderRadius:10,background:"#FFF",
+                  transition:"transform 0.2s",
+                  transform:caLatestOnly?"translateX(22px)":"translateX(0px)",
+                }}/>
+              </div>
+            </div>
+          )}
 
           <button style={s.startBtn(!subject||loading)} disabled={!subject||loading} onClick={fetchQuestions}>
             {loading ? "⏳ Generating Questions..." : "🚀 Start Practice Test"}
