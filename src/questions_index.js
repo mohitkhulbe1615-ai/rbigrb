@@ -7,7 +7,8 @@ import { CA_BANK_2 } from './ca_bank_2.js';
 import { CA_BANK_3 } from './ca_bank_3.js';
 import { ESI_BANK } from './questions_esi.js';
 import { FM_BANK } from './questions_fm.js';
-import { QUANT_BANK, REASONING_BANK } from './questions_other.js';
+import { QUANT_BANK } from './questions_other.js';
+import { REASONING_BANK } from './questions_reasoning_new.js';
 import { ENGLISH_BANK } from './questions_english_new.js';
 
 // GA = static GK only (1000 questions)
